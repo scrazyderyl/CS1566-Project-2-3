@@ -3,50 +3,50 @@
 #include <time.h>
 #include "maze_algorithms.h"
 
-void set_left(Cell (*maze)[MAZE_WIDTH], int x, int y, int value) {
+void set_left(Cell **maze, int x, int y, int value) {
     maze[x][y].left = value;
     maze[x - 1][y].right = value;
 }
 
-void set_right(Cell (*maze)[MAZE_WIDTH], int x, int y, int value) {
+void set_right(Cell **maze, int x, int y, int value) {
     maze[x][y].right = value;
     maze[x + 1][y].left = value;
 }
 
-void set_top(Cell (*maze)[MAZE_WIDTH], int x, int y, int value) {
+void set_top(Cell **maze, int x, int y, int value) {
     maze[x][y].top = value;
     maze[x][y - 1].bottom = value;
 }
 
-void set_bottom(Cell (*maze)[MAZE_WIDTH], int x, int y, int value) {
+void set_bottom(Cell **maze, int x, int y, int value) {
     maze[x][y].bottom = value;
     maze[x][y + 1].top = value;
 }
 
-void generate_empty_maze(Cell (*maze)[MAZE_WIDTH]) {
+void generate_empty_maze(Cell **maze, int width, int height) {
     // Initialize values to open
-    for (int y = 0; y < MAZE_HEIGHT; y++) {
-        for (int x = 0; x < MAZE_WIDTH; x++) {
+    for (int x = 0; x < width; x++) {
+        for (int y = 0; y < height; y++) {
             maze[x][y] = (Cell) { 0, 0, 0, 0 };
         }
     }
 
-    for (int x = 0; x < MAZE_WIDTH; x++) {
+    for (int x = 0; x < width; x++) {
         maze[x][0].top = 1; // Maze top
-        maze[x][MAZE_HEIGHT - 1].bottom = 1; // Maze bottom
+        maze[x][height - 1].bottom = 1; // Maze bottom
     }
 
-    for (int y = 0; y < MAZE_WIDTH; y++) {
+    for (int y = 0; y < height; y++) {
         maze[0][y].left = 1; // Maze left
-        maze[MAZE_WIDTH - 1][y].right = 1; // Maze right
+        maze[width - 1][y].right = 1; // Maze right
     }
 
     // Open starting points
     maze[0][0].left = 0;
-    maze[MAZE_WIDTH - 1][MAZE_HEIGHT - 1].right = 0;
+    maze[width - 1][height - 1].right = 0;
 }
 
-void generate_recursive(Cell (*maze)[MAZE_WIDTH], int x1, int y1, int x2, int y2) {
+void generate_recursive(Cell **maze, int x1, int y1, int x2, int y2) {
     int x_range = x2 - x1;
     int y_range = y2 - y1;
 
@@ -108,31 +108,31 @@ void generate_recursive(Cell (*maze)[MAZE_WIDTH], int x1, int y1, int x2, int y2
     generate_recursive(maze, x_center + 1, y_center + 1, x2, y2); // Bottom right
 }
 
-void generate_maze(Cell (*maze)[MAZE_WIDTH]) {
-    generate_empty_maze(maze);
-    generate_recursive(maze, 0, 0, MAZE_WIDTH - 1, MAZE_HEIGHT - 1);
+void generate_maze(Cell **maze, int width, int height) {
+    generate_empty_maze(maze, width, height);
+    generate_recursive(maze, 0, 0, width - 1, height - 1);
 }
 
-void print_maze(Cell (*maze)[MAZE_WIDTH]) {
-    for (int y = 0; y < MAZE_HEIGHT; y++) {
-        for (int x = 0; x < MAZE_WIDTH; x++) {
+void print_maze(Cell **maze, int width, int height) {
+    for (int y = 0; y < height; y++) {
+        for (int x = 0; x < width; x++) {
             Cell cell = maze[x][y];
             printf("+%s", cell.top ? "---" : "   ");
         }
 
         printf("+\n");
 
-        for (int x = 0; x < MAZE_WIDTH; x++) {
+        for (int x = 0; x < width; x++) {
             Cell cell = maze[x][y];
             printf("%c   ", cell.left ? '|' : ' ');
         }
 
-        printf("%c\n", maze[MAZE_WIDTH - 1][y].right ? '|' : ' ');
+        printf("%c\n", maze[width - 1][y].right ? '|' : ' ');
     }
 
     // Bottom of maze
-    for (int x = 0; x < MAZE_WIDTH; x++) {
-        Cell cell = maze[x][MAZE_HEIGHT - 1];
+    for (int x = 0; x < width; x++) {
+        Cell cell = maze[x][height - 1];
         printf("+%s", cell.bottom ? "---" : "   ");
     }
 
@@ -141,9 +141,16 @@ void print_maze(Cell (*maze)[MAZE_WIDTH]) {
 
 void main(int argc, const char *argv[]) {
     srand(time(NULL));
-    
-    Cell maze[MAZE_WIDTH][MAZE_HEIGHT];
 
-    generate_maze(maze);
-    print_maze(maze);
+    int width = 8;
+    int height = 8;
+    
+    Cell *maze[width];
+
+    for (int i = 0; i < width; i++) {
+        maze[i] = malloc(height * sizeof(Cell));
+    }
+
+    generate_maze(maze, width, height);
+    print_maze(maze, width, height);
 }
