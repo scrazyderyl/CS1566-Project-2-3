@@ -1,10 +1,25 @@
-#include <OpenGL/gl.h>
+#ifdef __APPLE__
+
+#include <OpenGL/OpenGL.h>
 #include <GLUT/glut.h>
+
+#else
+
+#include <GL/glew.h>
+#include <GL/freeglut.h>
+#include <GL/freeglut_ext.h>
+
+#endif
 
 #include "myLib.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+
+# ifndef M_PI
+# define M_PI 3.14159265358979323846
+
+#endif
 
 
 //---------------------Vector Functions---------------------
