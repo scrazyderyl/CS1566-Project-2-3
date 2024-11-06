@@ -109,6 +109,7 @@ void generate_recursive(Cell **maze, int x1, int y1, int x2, int y2) {
 }
 
 void generate_maze(Cell **maze, int width, int height) {
+    srand(time(NULL));
     generate_empty_maze(maze, width, height);
     generate_recursive(maze, 0, 0, width - 1, height - 1);
 }
@@ -139,18 +140,18 @@ void print_maze(Cell **maze, int width, int height) {
     printf("+\n");
 }
 
-void main(int argc, const char *argv[]) {
-    srand(time(NULL));
+// void main(int argc, const char *argv[]) {
+//     srand(time(NULL));
 
-    int width = 8;
-    int height = 8;
+//     int width = 8;
+//     int height = 8;
     
-    Cell *maze[width];
+//     Cell *maze[width];
 
-    for (int i = 0; i < width; i++) {
-        maze[i] = malloc(height * sizeof(Cell));
-    }
+//     for (int i = 0; i < width; i++) {
+//         maze[i] = malloc(height * sizeof(Cell));
+//     }
 
-    generate_maze(maze, width, height);
-    print_maze(maze, width, height);
-}
+//     generate_maze(maze, width, height);
+//     print_maze(maze, width, height);
+// }

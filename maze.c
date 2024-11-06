@@ -23,14 +23,38 @@
 #include "myLib.h"
 #include <stdio.h>
 #include <stdlib.h>
+#include "maze_algorithms.h"
 
 mat4 current_transformation_matrix = {{1,0,0,0},{0,1,0,0},{0,0,1,0},{0,0,0,1}};
 GLuint ctm_location;
 
 int num_vertices;
 
+
 void init(void)
 {
+    // Ask for input and generate maze
+    printf("Enter width and the height for the size of the maze (ex. 6 8)\n");
+    int width, height;
+    if(scanf("%d %d", &width, &height) > 0)
+    {
+
+        Cell *maze[width];
+
+        for (int i = 0; i < width; i++) {
+            maze[i] = malloc(height * sizeof(Cell));
+        }
+
+        printf("Width: %d Height: %d\n", width, height);
+        generate_maze(maze, width, height);
+        print_maze(maze, width, height);
+    }
+    else
+    {
+        printf("\nInvalid Input! Exiting...\n");
+        exit(1);
+    }
+
     num_vertices = 3; // Change this dynamically after maze generation
     GLuint program = initShader("vshader.glsl", "fshader.glsl");
     glUseProgram(program);
