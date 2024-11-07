@@ -1,0 +1,16 @@
+LIBS = -lXi -lXmu -lglut -lGLEW -lGLU -lm -lGL
+
+template: maze.c maze_algorithms.o initShader.o myLib.o
+	gcc -o maze maze.c maze_algorithms.o initShader.o myLib.o $(LIBS)
+
+maze_algorithms.o: maze_algorithms.c maze_algorithms.h
+	gcc -c maze_algorithms.c
+
+initShader.o: initShader.c initShader.h
+	gcc -c initShader.c
+
+myLib.o: myLib.c myLib.h
+	gcc -c myLib.c
+
+clean:
+	rm -f maze maze_algorithms.o initShader.o myLib.o
