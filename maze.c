@@ -63,8 +63,13 @@ void init(void)
     vec4 *colors = (vec4 *) malloc(sizeof(vec4) * num_vertices);
 
     GLuint vao;
+    #ifdef __APPLE__
     glGenVertexArraysAPPLE(1, &vao);
     glBindVertexArrayAPPLE(vao);
+    #else
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+    #endif
 
     GLuint buffer;
     glGenBuffers(1, &buffer);
@@ -98,7 +103,7 @@ void display(void)
 
     glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat *) &current_transformation_matrix);
     
-    glDrawArrays(GL_TRIANGLES, 0, 3);
+    glDrawArrays(GL_TRIANGLES, 0, num_vertices);
 
     glutSwapBuffers();
 }
@@ -141,6 +146,9 @@ int main(int argc, char **argv)
     glutInitWindowSize(512, 512);
     glutInitWindowPosition(100,100);
     glutCreateWindow("Maze");
+    #ifndef __APPLE__
+    glewInit();
+    #endif
     init();
     glutDisplayFunc(display);
     glutKeyboardFunc(keyboard);
