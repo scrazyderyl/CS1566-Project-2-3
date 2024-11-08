@@ -58,9 +58,11 @@ Block BLOCK_BIRCH_PLANKS;
 Block BLOCK_BRICKS;
 Block BLOCK_STONE_BRICKS;
 
-float ISLAND_PADDING = 6;
-float CELL_SIZE = 3;
-float WALL_HEIGHT = 5;
+int ISLAND_PADDING = 6;
+int CELL_SIZE = 3;
+int WALL_HEIGHT = 5;
+int REMOVE_DIST = 2;
+
 float TEX_SIZE = 0.25;
 
 Cell **maze;
@@ -68,6 +70,7 @@ int width;
 int height;
 
 size_t num_vertices;
+size_t vertex_index = 0;
 vec4 *positions;
 vec2 *tex_coords;
 
@@ -216,98 +219,90 @@ void set_cube_texture(int index, vec2 x_pos, vec2 x_neg, vec2 y_pos, vec2 y_neg,
     tex_coords[index + 35] = (vec2) { x2, y1 };
 }
 
-void set_block(int index, int x, int y, int z, Block block) {
-    set_cube_vertices(index, x, y, z, 1);
-    set_cube_texture(index, block.x_pos, block.x_neg, block.y_pos, block.y_neg, block.z_pos, block.z_neg);
+int try_probability(int numerator, int denominator) {
+    return numerator > rand() % denominator;
 }
 
-void set_island_block(int *index, int x, int y, int z) {
-    if (y == 0) {
-        set_block(*index, x, y, z, BLOCK_GRASS);
-    } else {
-        set_block(*index, x, y, z, BLOCK_DIRT);
-    }
+void set_block(int x, int y, int z, Block block) {
+    set_cube_vertices(vertex_index, x, y, z, 1);
+    set_cube_texture(vertex_index, block.x_pos, block.x_neg, block.y_pos, block.y_neg, block.z_pos, block.z_neg);
 
-    *index += 36;
+    vertex_index += 36;
 }
 
-void generate_island_column(int *index, int x, int z, int min_distance) {
-    int fill_until = 2 - min_distance;
+void generate_island_column(int x, int z, int min_distance) {
+    int fill_until = REMOVE_DIST - min_distance;
 
     if (fill_until > 0) {
         fill_until = 0;
     }
 
-    int min_y = -2 - min_distance;
-    int chance_numerator = 1;
-    int chance_denominator = 6;
+    int min_y = -REMOVE_DIST - min_distance;
 
-    for (int y = 0; y > fill_until; y--) {
-        set_island_block(index, x, y, z);
+    // Guaranteed blocks
+    if (fill_until < 0) {
+        set_block(x, 0, z, BLOCK_GRASS);
     }
 
-    // Randomly remove blocks
+    for (int y = -1; y > fill_until; y--) {
+        set_block(x, y, z, BLOCK_DIRT);
+    }
+
+    // Determine number of blocks to place at end
     int y = min_y;
 
     for (; y <= fill_until; y++) {
-        if (chance_numerator > rand() % chance_denominator) {
+        if (try_probability(1, 4)) {
             break;
         }
     }
 
-    for (; y <= fill_until; y++) {
-        set_island_block(index, x, y, z);
+    if (y < 0) {
+        set_block(x, 0, z, BLOCK_GRASS);
+    }
+
+    for (; y <= fill_until - 1; y++) {
+        set_block(x, y, z, BLOCK_DIRT);
     }
 }
 
-void generate_maze_wall(int *index, int x, int z, Block block) {
-    int maze_top = 2 + WALL_HEIGHT;
-    int random_removal_level = maze_top - 2;
-    int chance_numerator = 1;
-    int chance_denominator = 3;
+void generate_maze_wall(int x, int z, Block block) {
+    int maze_top = 1 + WALL_HEIGHT;
+    int random_removal_level = maze_top - REMOVE_DIST;
 
-    for (int y = 2; y < random_removal_level; y++) {
-        set_block(*index, x, y, z, block);
-
-        *index += 36;
+    // Guaranteed blocks
+    for (int y = 2; y <= random_removal_level; y++) {
+        set_block(x, y, z, block);
     }
 
-    // Randomly remove blocks
-    int y = maze_top - 1;
+    // Determine number of many blocks to place at end
+    int y = maze_top;
 
-    for (; y >= random_removal_level; y--) {
-        if (chance_numerator > rand() % chance_denominator) {
+    for (; y > random_removal_level; y--) {
+        if (try_probability(1, 3)) {
             break;
         }
     }
 
-    for (; y >= random_removal_level; y--) {
-        set_block(*index, x, y, z, block);
-        
-        *index += 36;
+    for (; y > random_removal_level; y--) {
+        set_block(x, y, z, block);
     }
 }
 
 void generate_world() {
-    // Calculate number of vertices
+    // Calculate max number of vertices without missing blocks
     int maze_x_size = width * (CELL_SIZE + 1) + 1;
     int maze_z_size = height * (CELL_SIZE + 1) + 1;
-    int maze_smaller_side;
-    int maze_larger_side;
-
-    if (maze_x_size < maze_z_size) {
-        maze_smaller_side = maze_x_size;
-    } else {
-        maze_smaller_side = maze_z_size;
-    }
 
     int total_x_size = ISLAND_PADDING * 2 + maze_x_size;
-    int total_y_size = 1 + WALL_HEIGHT + maze_smaller_side / 2;
     int total_z_size = ISLAND_PADDING * 2 + maze_z_size;
+    int island_smaller_side = maze_x_size < maze_z_size ? maze_x_size : maze_z_size;
+    int total_y_size = 1 + WALL_HEIGHT + (island_smaller_side + 1) / 2;
 
-    int maze_vertices = maze_x_size * maze_z_size * (1 + WALL_HEIGHT);
-    int island_vertices = total_x_size * total_z_size * maze_smaller_side / 2;
-    num_vertices = (maze_vertices, island_vertices) * 36;
+    size_t maze_floor_blocks = maze_x_size * maze_z_size;
+    size_t maze_walls_blocks = ((height + 1) * (width + 1) + (height * (width + 1) + width * (height + 1) - width * height - 1) * CELL_SIZE) * WALL_HEIGHT;
+    size_t island_blocks = total_x_size * total_z_size * (REMOVE_DIST + (island_smaller_side + 1) / 2); // Not correct, should be 34662 for 10x10 maze
+    num_vertices = (maze_floor_blocks + maze_walls_blocks + island_blocks) * 36;
 
     // Center x and z and scale
     int max = total_x_size;
@@ -329,7 +324,6 @@ void generate_world() {
     tex_coords = (vec2 *) malloc(sizeof(vec2) * num_vertices);
 
     // Generate
-    int index = 0;
 
     // Generate island
     int island_x_min = -ISLAND_PADDING;
@@ -362,16 +356,14 @@ void generate_world() {
                 min_distance = dist_from_bottom;
             }
 
-            generate_island_column(&index, x, z, min_distance);
+            generate_island_column(x, z, min_distance);
         }
     }
 
     // Generate maze base
     for (int x = 0; x < maze_x_size; x++) {
         for (int z = 0; z < maze_z_size; z++) {
-            set_block(index, x, 1, z, BLOCK_BIRCH_PLANKS);
-
-            index += 36;
+            set_block(x, 1, z, BLOCK_BIRCH_PLANKS);
         }
     }
 
@@ -390,29 +382,29 @@ void generate_world() {
             cell = maze[x][y];
             int x_pos = x * (CELL_SIZE + 1);
 
-            generate_maze_wall(&index, x_pos, z_pos, BLOCK_STONE_BRICKS);
+            generate_maze_wall(x_pos, z_pos, BLOCK_STONE_BRICKS);
 
             // Top wall
             if (cell.top) {   
                 for (int i = 1; i <= CELL_SIZE; i++) {
-                    generate_maze_wall(&index, x_pos + i, z_pos, BLOCK_BRICKS);
+                    generate_maze_wall(x_pos + i, z_pos, BLOCK_BRICKS);
                 }
             }
 
             // Left wall
             if (cell.left) {
                 for (int i = 1; i <= CELL_SIZE; i++) {
-                    generate_maze_wall(&index, x_pos, z_pos + i, BLOCK_BRICKS);
+                    generate_maze_wall(x_pos, z_pos + i, BLOCK_BRICKS);
                 }
             }
         }
 
         // Right of row
-        generate_maze_wall(&index, right_pos, z_pos, BLOCK_STONE_BRICKS);
+        generate_maze_wall(right_pos, z_pos, BLOCK_STONE_BRICKS);
 
         if (cell.right) {
             for (int i = 1; i <= CELL_SIZE; i++) {
-                generate_maze_wall(&index, right_pos, z_pos + i, BLOCK_BRICKS);
+                generate_maze_wall(right_pos, z_pos + i, BLOCK_BRICKS);
             }
         }
     }
@@ -422,17 +414,20 @@ void generate_world() {
         Cell cell = maze[x][height - 1];
         int x_pos = x * (CELL_SIZE + 1);
 
-        generate_maze_wall(&index, x_pos, bottom_pos, BLOCK_STONE_BRICKS);
+        generate_maze_wall(x_pos, bottom_pos, BLOCK_STONE_BRICKS);
     
         if (cell.bottom) {
             for (int i = 1; i <= CELL_SIZE; i++) {
-                generate_maze_wall(&index, x_pos + i, bottom_pos, BLOCK_BRICKS);
+                generate_maze_wall(x_pos + i, bottom_pos, BLOCK_BRICKS);
             }
         }
     }
 
     // Bottom right corner
-    generate_maze_wall(&index, right_pos, bottom_pos, BLOCK_STONE_BRICKS);
+    generate_maze_wall(right_pos, bottom_pos, BLOCK_STONE_BRICKS);
+
+    // Set actual number of vertices
+    num_vertices = vertex_index;
 }
 
 void prompt_maze_size() {
