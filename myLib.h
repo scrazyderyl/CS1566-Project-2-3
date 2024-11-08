@@ -28,6 +28,11 @@ typedef struct {
     vec3 z;
 } mat3;
 
+typedef struct {
+    GLfloat x;
+    GLfloat y;
+} vec2;
+
 // Insert function signatures after this line
 
 // Vector Functions

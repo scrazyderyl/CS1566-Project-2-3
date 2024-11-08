@@ -1,4 +1,5 @@
 \.vscode
 initShader.o
 myLib.o
+maze_algorithms.o
 maze
