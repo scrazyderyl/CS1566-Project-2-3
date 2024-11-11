@@ -415,10 +415,37 @@ mat4 rotate_arbitrary_y(GLfloat ax, GLfloat d) {
 
 //---------------------Viewing functions---------------------
 
-//unfinished
 mat4 look_at(GLfloat eyex, GLfloat eyey, GLfloat eyez,
              GLfloat atx,  GLfloat aty,  GLfloat atz,
              GLfloat upx,  GLfloat upy,  GLfloat upz)
 {
-    return m4_identity(); // Will replace with look_at() implementation from slides
+    float distance = sqrt((pow(-eyex, 2) + pow(eyey, 2) + pow(eyez, 2)));
+    //vec4 p = (vec4) {(-distance)/sqrt(3), distance/sqrt(3), distance/sqrt(3), 1};
+
+    // mat4 r = (mat4) {{1/sqrt(2), 1/sqrt(6), -(1/sqrt(3)), 0}, 
+    //                  {0, 2/sqrt(6), 1/sqrt(3), 0}, 
+    //                  {1/sqrt(2), -(1/sqrt(6)), 1/sqrt(3), 0}, 
+    //                  {0, 0, 0, 1}};
+
+    // vec4 old_eye = {eyex, eyey, eyez, 0};
+
+    // mat4 t = translation(distance/sqrt(3), -(distance/sqrt(3)), -(distance/sqrt(3)));
+
+    // mat4 v = matrixmult_mat4(r, t);
+
+    vec4 eye = (vec4) {eyex, eyey, eyez, 1.0};
+    vec4 at = (vec4) {atx, aty, atz, 1.0};
+    vec4 up = (vec4) {upx, upy, upz, 0};
+
+    vec4 new_z = normalize_v4(sub_v4(eye, at));
+    vec4 new_x = normalize_v4(crossprod_v4(up, new_z));
+    vec4 new_y = normalize_v4(crossprod_v4(new_z, new_x));
+
+    mat4 translation_matrix = translation(-eyex, -eyey, -eyez);
+    mat4 rotation_matrix = (mat4)  {{new_x.x, new_y.x, new_z.x, 0}, 
+                                    {new_x.y, new_y.y, new_z.y, 0}, 
+                                    {new_x.z, new_y.z, new_z.z, 0}, 
+                                    {0, 0, 0, 1}};
+
+    return matrixmult_mat4(rotation_matrix, translation_matrix);
 }

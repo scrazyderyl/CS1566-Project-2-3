@@ -6,8 +6,10 @@ varying vec2 texCoord;
 
 uniform mat4 ctm;
 
+uniform mat4 model_view;
+
 void main()
 {
 	texCoord = vTexCoord;
-	gl_Position = ctm * vPosition;
+	gl_Position = model_view * ctm * vPosition;
 }

@@ -78,6 +78,9 @@ vec2 *tex_coords;
 mat4 ctm;
 GLuint ctm_location;
 
+GLuint model_view_location;
+mat4 model_view = {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0,0,1}};
+
 // Rotation variable so mouse and motion can interact
 vec4 click_vector;
 mat4 previous_rotation_matrix;
@@ -444,8 +447,8 @@ void prompt_maze_size() {
     width = 10;
     height = 10;
 
-    if (1)
-    // if(scanf("%d %d", &width, &height) > 0 && width > 0 && height > 0)
+    //if (1)
+    if(scanf("%d %d", &width, &height) > 0 && width > 0 && height > 0)
     {
         maze = malloc(width * sizeof(Cell *));
 
@@ -462,6 +465,11 @@ void prompt_maze_size() {
         printf("\nInvalid Input! Exiting...\n");
         exit(1);
     }
+}
+
+// Sets the view to a towdown view of the maze
+void set_topdown_view() {
+    model_view = look_at(0, 1, 0, 0, -1, 0, 1, 0, 0);
 }
 
 void init(void)
@@ -517,6 +525,7 @@ void init(void)
     glVertexAttribPointer(vTexCoord, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * num_vertices));
 
     ctm_location = glGetUniformLocation(program, "ctm");
+    model_view_location = glGetUniformLocation(program, "model_view");
 
     GLuint texture_location = glGetUniformLocation(program, "texture");
     glUniform1i(texture_location, 0);
@@ -532,6 +541,7 @@ void display(void)
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
     glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat*) &ctm);
+    glUniformMatrix4fv(model_view_location, 1, GL_FALSE, (GLfloat *) &model_view);
 
     glDrawArrays(GL_TRIANGLES, 0, num_vertices);
 
@@ -540,7 +550,6 @@ void display(void)
 
 void keyboard(unsigned char key, int mousex, int mousey)
 {
-    
     switch(key) {
         case 'q':
             exit(0);
@@ -556,8 +565,15 @@ void keyboard(unsigned char key, int mousex, int mousey)
         case 's':
             // Move back
             break;
-        case 'n':
-            // Move right
+        case 'j':
+            // Turn left
+            break;
+        case 'l':
+            // Turn right
+            break;
+        case 'r':
+            // Reset View
+            set_topdown_view();
             break;
     }
 
@@ -649,11 +665,14 @@ int main(int argc, char **argv)
     prompt_maze_size();
     generate_world();
     init();
+    //set_topdown_view();
     glutDisplayFunc(display);
     glutKeyboardFunc(keyboard);
     glutMouseFunc(mouse);
     glutMotionFunc(motion);
+    //set_topdown_view();
     glutMainLoop();
 
     return 0;
 }
+
