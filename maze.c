@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 #include "initShader.h"
 #include "myLib.h"
 #include "maze_algorithms.h"
@@ -76,6 +77,12 @@ vec2 *tex_coords;
 
 mat4 ctm;
 GLuint ctm_location;
+
+// Rotation variable so mouse and motion can interact
+vec4 click_vector;
+mat4 previous_rotation_matrix;
+int rotation_enabled;
+int is_first_rotation = 1;
 
 void define_blocks() {
     BLOCK_GRASS = (Block) { TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_TOP, TEXTURE_DIRT, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE };
@@ -533,6 +540,7 @@ void display(void)
 
 void keyboard(unsigned char key, int mousex, int mousey)
 {
+    
     switch(key) {
         case 'q':
             exit(0);
@@ -540,10 +548,16 @@ void keyboard(unsigned char key, int mousex, int mousey)
             // Move forward
             break;
         case 'a':
-            // Turn left
+            // Move left
             break;
         case 'd':
-            // Turn right
+            // Move right
+            break;
+        case 's':
+            // Move back
+            break;
+        case 'n':
+            // Move right
             break;
     }
 
@@ -551,13 +565,71 @@ void keyboard(unsigned char key, int mousex, int mousey)
 }
 
 void mouse(int button, int state, int x, int y) {
-    ctm = m4_identity();
+    if(state == GLUT_DOWN && button == GLUT_LEFT_BUTTON) {
+        float x_coordinate = (x * 2.0 / 1023.0) - 1;
+        float y_coordinate = -((y * 2.0 / 1023.0) - 1);
+        float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
 
-    glutPostRedisplay();
+        // Disable rotation if z is nan
+        rotation_enabled = isnan(z_coordinate) ? 0 : 1;
+
+        click_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
+        click_vector = normalize_v4(click_vector);
+    } 
+
+    if(state == GLUT_UP && button == GLUT_LEFT_BUTTON) {
+        previous_rotation_matrix = ctm;
+    }
     
 }
 
 void motion(int x, int y) {
+    if(rotation_enabled) {
+        float x_coordinate = (x * 2.0 / 1023.0) - 1;
+        float y_coordinate = -((y * 2.0 / 1023.0) - 1);
+        float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
+
+        // Disable rotation if z is nan
+        rotation_enabled = isnan(z_coordinate) ? 0 : 1;
+
+        vec4 drag_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
+        drag_vector = normalize_v4(drag_vector);
+
+        if(rotation_enabled) {
+            // Take the cross product to get the rotate about vector
+            vec4 rotation_vector = crossprod_v4(click_vector, drag_vector);
+            rotation_vector = normalize_v4(rotation_vector);
+
+            // If the subtraction results in a nan, don't rotate
+            if(isnan(rotation_vector.x) || isnan(rotation_vector.y) ||  isnan(rotation_vector.z) || isnan(rotation_vector.w)) return;
+
+            GLfloat ax = rotation_vector.x;
+            GLfloat ay = rotation_vector.y;
+            GLfloat az = rotation_vector.z;
+            GLfloat d = sqrt(pow(ay, 2) + pow(az, 2));
+
+            // If there is no previous rotation matrix since this is the first
+            // set the previous to the current ctm
+            if(is_first_rotation){
+                previous_rotation_matrix = ctm;
+                is_first_rotation = 0;
+            }
+
+            ctm = matrixmult_mat4(rotate_arbitrary_x(ay, az, d), previous_rotation_matrix);
+            ctm = matrixmult_mat4(rotate_arbitrary_y(ax, d), ctm);
+
+            float z_degrees = acos(dotprod_v4(click_vector, drag_vector)) * 180.0 / M_PI;
+            ctm = matrixmult_mat4(rotate_z(z_degrees), ctm);
+
+            ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_y(ax, d)), ctm);
+            ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_x(ay, az, d)), ctm);
+        }
+        
+        else return;
+    }
+    else return;
+
+
     glutPostRedisplay();
 }
 
