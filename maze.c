@@ -75,9 +75,6 @@ size_t vertex_index = 0;
 vec4 *positions;
 vec2 *tex_coords;
 
-mat4 ctm;
-GLuint ctm_location;
-
 GLuint model_view_location;
 mat4 model_view = {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0,0,1}};
 
@@ -86,6 +83,9 @@ vec4 click_vector;
 mat4 previous_rotation_matrix;
 int rotation_enabled;
 int is_first_rotation = 1;
+
+// Variables to keep track of island mins and maxes
+int left, right, bottom, top, near, far;
 
 void define_blocks() {
     BLOCK_GRASS = (Block) { TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_TOP, TEXTURE_DIRT, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE };
@@ -309,6 +309,8 @@ void generate_world() {
     int island_smaller_side = maze_x_size < maze_z_size ? maze_x_size : maze_z_size;
     int total_y_size = 1 + WALL_HEIGHT + (island_smaller_side + 1) / 2;
 
+    printf("X: %d, Y: %d Z: %d\n", total_x_size, total_y_size, total_z_size);
+
     size_t maze_floor_blocks = maze_x_size * maze_z_size;
     size_t maze_walls_blocks = ((height + 1) * (width + 1) + (height * (width + 1) + width * (height + 1) - width * height - 1) * CELL_SIZE) * WALL_HEIGHT;
     size_t island_blocks = total_x_size * total_z_size * (REMOVE_DIST + (island_smaller_side + 1) / 2); // Not correct, should be 34662 for 10x10 maze
@@ -325,9 +327,24 @@ void generate_world() {
         max = total_z_size;
     }
 
-    ctm = translation((float)(total_x_size - 2 * ISLAND_PADDING) / -2, 0, (float)(total_z_size - 2 * ISLAND_PADDING) / -2);
+    model_view = translation((float)(total_x_size - 2 * ISLAND_PADDING) / -2, 0, (float)(total_z_size - 2 * ISLAND_PADDING) / -2);
     float scale_factor = 1 / (float)max;
-    ctm = matrixmult_mat4(scale(scale_factor, scale_factor, scale_factor), ctm);
+    model_view = matrixmult_mat4(scale(scale_factor, scale_factor, scale_factor), model_view);
+
+    left = -ISLAND_PADDING;
+    right = total_x_size - ISLAND_PADDING;
+    bottom = -total_y_size;
+    top = total_y_size;
+    near = total_z_size - ISLAND_PADDING;
+    far = -ISLAND_PADDING;
+
+    printf("Left: %d Right: %d\n", left, right);
+    printf("Bottom: %d Top: %d\n", bottom, top);
+    printf("Near: %d Far: %d\n", near, far);
+
+    model_view = ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10);
+
+
 
     // Allocate arrays
     positions = (vec4 *) malloc(sizeof(vec4) * num_vertices);
@@ -447,8 +464,8 @@ void prompt_maze_size() {
     width = 10;
     height = 10;
 
-    //if (1)
-    if(scanf("%d %d", &width, &height) > 0 && width > 0 && height > 0)
+    if (1)
+    //if(scanf("%d %d", &width, &height) > 0 && width > 0 && height > 0)
     {
         maze = malloc(width * sizeof(Cell *));
 
@@ -469,7 +486,11 @@ void prompt_maze_size() {
 
 // Sets the view to a towdown view of the maze
 void set_topdown_view() {
-    model_view = look_at(0, 1, 0, 0, -1, 0, 1, 0, 0);
+    model_view = look_at(0, 1, 0, // eye
+                         0, -1, 0, // at
+                         0, 0, -1); // up
+
+    model_view = matrixmult_mat4(ortho(left - 10, right + 10, bottom, top, near + 10, far - 10), model_view); // Scale to fit view
 }
 
 void init(void)
@@ -524,7 +545,6 @@ void init(void)
     glEnableVertexAttribArray(vTexCoord);
     glVertexAttribPointer(vTexCoord, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * num_vertices));
 
-    ctm_location = glGetUniformLocation(program, "ctm");
     model_view_location = glGetUniformLocation(program, "model_view");
 
     GLuint texture_location = glGetUniformLocation(program, "texture");
@@ -540,7 +560,6 @@ void display(void)
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat*) &ctm);
     glUniformMatrix4fv(model_view_location, 1, GL_FALSE, (GLfloat *) &model_view);
 
     glDrawArrays(GL_TRIANGLES, 0, num_vertices);
@@ -594,7 +613,7 @@ void mouse(int button, int state, int x, int y) {
     } 
 
     if(state == GLUT_UP && button == GLUT_LEFT_BUTTON) {
-        previous_rotation_matrix = ctm;
+        previous_rotation_matrix = model_view;
     }
     
 }
@@ -624,21 +643,21 @@ void motion(int x, int y) {
             GLfloat az = rotation_vector.z;
             GLfloat d = sqrt(pow(ay, 2) + pow(az, 2));
 
-            // If there is no previous rotation matrix since this is the first
-            // set the previous to the current ctm
             if(is_first_rotation){
-                previous_rotation_matrix = ctm;
+                previous_rotation_matrix = model_view;
                 is_first_rotation = 0;
             }
 
-            ctm = matrixmult_mat4(rotate_arbitrary_x(ay, az, d), previous_rotation_matrix);
-            ctm = matrixmult_mat4(rotate_arbitrary_y(ax, d), ctm);
+            //model_view = matrixmult_mat4(translation(-((left + right) / 2), -((bottom + top) / 2), -((near + far) / 2)), previous_rotation_matrix);
+            model_view = matrixmult_mat4(rotate_arbitrary_x(ay, az, d), previous_rotation_matrix);
+            model_view = matrixmult_mat4(rotate_arbitrary_y(ax, d), model_view);
 
             float z_degrees = acos(dotprod_v4(click_vector, drag_vector)) * 180.0 / M_PI;
-            ctm = matrixmult_mat4(rotate_z(z_degrees), ctm);
+            model_view = matrixmult_mat4(rotate_z(z_degrees), model_view);
 
-            ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_y(ax, d)), ctm);
-            ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_x(ay, az, d)), ctm);
+            model_view = matrixmult_mat4(transpose_mat4(rotate_arbitrary_y(ax, d)), model_view);
+            model_view = matrixmult_mat4(transpose_mat4(rotate_arbitrary_x(ay, az, d)), model_view);
+            //model_view = matrixmult_mat4(translation(((left + right) / 2), ((bottom + top) / 2), ((near + far) / 2)), model_view);
         }
         
         else return;
