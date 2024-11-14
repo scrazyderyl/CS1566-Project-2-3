@@ -515,6 +515,9 @@ void set_topdown_view() {
 
     model_view = matrixmult_mat4(model_view, ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10)); // Scale to fit view
 
+    // No need for projection here, reset it
+    projection = m4_identity();
+
     // Have the rotation remember that you're looking from the top now
     previous_rotation_matrix = model_view;
 
@@ -530,7 +533,7 @@ void go_to_entrance()
     z_pos = 2.5;
     // model_view = look_at(0, 2, 0, 1, 2, 0, 0, 1, 0);
     model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-    projection = frustum(-1, 1, 0, 2, -1, -100);
+    projection = frustum(-1, 1, 0, 2, -1, -150);
     rotation_enabled = 0;
 }
 
@@ -551,6 +554,7 @@ void print_helper_text()
 
     printf("\n---------[Camera]---------\n");
     printf("T - Topdown View\n");
+    printf("E - Go to Entrance\n");
 
 
     printf("\n");
@@ -673,7 +677,7 @@ void keyboard(unsigned char key, int mousex, int mousey)
             // Reset View
             set_topdown_view();
             break;
-        case 'p':
+        case 'e':
             go_to_entrance();
     }
 
