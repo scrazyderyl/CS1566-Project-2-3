@@ -1,3 +1,5 @@
+# Project 2/3 Maze
+
 - Greyson Barsotti
 - Jason Ye
 - Samuel Wang
@@ -6,14 +8,14 @@
 Q - Exit Program
 
 ## Movement
-W - Move Forward
-A - Move Left
-S - Move Backward
+W - Move Forward\
+A - Move Left\
+S - Move Backward\
 D - Move Right
 
-J - Rotate Left
+J - Rotate Left\
 L - Rotate Right
 
 ## Camera
-T - Topdown View
+T - Topdown View\
 E - Go to Entrance
