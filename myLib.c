@@ -443,5 +443,20 @@ mat4 frustum(GLfloat left, GLfloat right,
            GLfloat bottom, GLfloat top, 
            GLfloat near, GLfloat far)
 {
-    return (mat4) {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0,0,1}};
+    mat4 H = (mat4) {{1, 0, 0, 0}, 
+                     {0, 1, 0, 0}, 
+                     {(left + right)/(-2 * near), (bottom + top)/(-2 * near), 1, 0}, 
+                     {0, 0, 0, 1}};
+
+    mat4 S = (mat4) {{(-2 * near)/(right - left), 0, 0, 0}, 
+                     {0, (-2 * near)/(top - bottom), 0, 0}, 
+                     {0, 0, 1, 0}, 
+                     {0, 0, 0, 1}};
+
+    mat4 N = (mat4) {{1, 0, 0, 0},
+                     {0, 1, 0, 0},
+                     {0, 0, (near + far) / (far - near), -1},
+                     {0, 0, -((2 * near * far)/(far - near)), 0}};
+
+    return matrixmult_mat4(N, matrixmult_mat4(S, H));
 }
