@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <math.h>
 #include "initShader.h"
 #include "myLib.h"
 #include "maze_algorithms.h"
@@ -74,8 +75,25 @@ size_t vertex_index = 0;
 vec4 *positions;
 vec2 *tex_coords;
 
-mat4 ctm;
-GLuint ctm_location;
+GLuint current_transformation_matrix;
+mat4 ctm = {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0,0,1}};
+
+GLuint model_view_location;
+mat4 model_view = {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0,0,1}};
+
+GLuint projection_location;
+mat4 projection = {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0,0,1}};
+
+// Rotation variable so mouse and motion can interact
+vec4 click_vector;
+mat4 previous_rotation_matrix;
+int rotation_enabled = 1;
+int is_first_rotation = 1;
+
+GLfloat x_pos, y_pos, z_pos;
+
+// Variables to keep track of island mins and maxes
+int left, right, bottom, top, near, far;
 
 void define_blocks() {
     BLOCK_GRASS = (Block) { TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_TOP, TEXTURE_DIRT, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE };
@@ -299,10 +317,13 @@ void generate_world() {
     int island_smaller_side = maze_x_size < maze_z_size ? maze_x_size : maze_z_size;
     int total_y_size = 1 + WALL_HEIGHT + (island_smaller_side + 1) / 2;
 
+    printf("X: %d, Y: %d Z: %d\n", total_x_size, total_y_size, total_z_size);
+
     size_t maze_floor_blocks = maze_x_size * maze_z_size;
     size_t maze_walls_blocks = ((height + 1) * (width + 1) + (height * (width + 1) + width * (height + 1) - width * height - 1) * CELL_SIZE) * WALL_HEIGHT;
     size_t island_blocks = total_x_size * total_z_size * (REMOVE_DIST + (island_smaller_side + 1) / 2); // Not correct, should be 34662 for 10x10 maze
-    num_vertices = (maze_floor_blocks + maze_walls_blocks + island_blocks) * 36;
+    // num_vertices = (maze_floor_blocks + maze_walls_blocks + island_blocks) * 36;
+    num_vertices = (maze_floor_blocks + maze_walls_blocks + island_blocks + 10) * 36; // This is for the testing boundary blocks. DELETE BEFORE TURNING IN!!!!!
 
     // Center x and z and scale
     int max = total_x_size;
@@ -315,15 +336,44 @@ void generate_world() {
         max = total_z_size;
     }
 
-    ctm = translation((float)(total_x_size - 2 * ISLAND_PADDING) / -2, 0, (float)(total_z_size - 2 * ISLAND_PADDING) / -2);
-    float scale_factor = 1 / (float)max;
-    ctm = matrixmult_mat4(scale(scale_factor, scale_factor, scale_factor), ctm);
+    // model_view = translation((float)(total_x_size - 2 * ISLAND_PADDING) / -2, 0, (float)(total_z_size - 2 * ISLAND_PADDING) / -2);
+    // float scale_factor = 1 / (float)max;
+    // model_view = matrixmult_mat4(scale(scale_factor, scale_factor, scale_factor), model_view);
+
+    left = -ISLAND_PADDING;
+    right = total_x_size - ISLAND_PADDING;
+    bottom = -total_y_size - 2;
+    top = total_y_size + 2;
+    near = total_z_size - ISLAND_PADDING;
+    far = -ISLAND_PADDING;
+
+    printf("Left: %d Right: %d\n", left, right);
+    printf("Bottom: %d Top: %d\n", bottom, top);
+    printf("Near: %d Far: %d\n", near, far);
+
+    model_view = ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10);
+
+
 
     // Allocate arrays
     positions = (vec4 *) malloc(sizeof(vec4) * num_vertices);
     tex_coords = (vec2 *) malloc(sizeof(vec2) * num_vertices);
 
-    // Generate
+    // Generate bound blocks for testing purposes
+    set_block(left, top, near, BLOCK_BRICKS);
+    set_block(right, top, near, BLOCK_BRICKS);
+
+    set_block(left, bottom, near, BLOCK_BRICKS);
+    set_block(right, bottom, near, BLOCK_BRICKS);
+
+    set_block(left, top, far, BLOCK_BRICKS);
+    set_block(right, top, far, BLOCK_BRICKS);
+
+    set_block(left, bottom, far, BLOCK_BRICKS);
+    set_block(right, bottom, far, BLOCK_BRICKS);
+
+    set_block((left + right) / 2, top, (near + far) / 2, BLOCK_GRASS);
+    set_block((left + right) / 2, bottom, (near + far) / 2, BLOCK_BIRCH_PLANKS);
 
     // Generate island
     int island_x_min = -ISLAND_PADDING;
@@ -438,7 +488,7 @@ void prompt_maze_size() {
     height = 10;
 
     if (1)
-    // if(scanf("%d %d", &width, &height) > 0 && width > 0 && height > 0)
+    //if(scanf("%d %d", &width, &height) > 0 && width > 0 && height > 0)
     {
         maze = malloc(width * sizeof(Cell *));
 
@@ -455,6 +505,56 @@ void prompt_maze_size() {
         printf("\nInvalid Input! Exiting...\n");
         exit(1);
     }
+}
+
+// Sets the view to a towdown view of the maze
+void set_topdown_view() {
+    model_view = look_at(0, 0, 0, // eye
+                         0, -1, 0, // at
+                         0, 0, -1); // up
+
+    model_view = matrixmult_mat4(model_view, ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10)); // Scale to fit view
+
+    // Have the rotation remember that you're looking from the top now
+    previous_rotation_matrix = model_view;
+
+    // Re-enable Rotation
+    rotation_enabled = 1;
+}
+
+void go_to_entrance()
+{
+    ctm = m4_identity();
+    x_pos = 0.5;
+    y_pos = 3.5;
+    z_pos = 2.5;
+    // model_view = look_at(0, 2, 0, 1, 2, 0, 0, 1, 0);
+    model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
+    projection = frustum(-1, 1, 0, 2, -1, -100);
+    rotation_enabled = 0;
+}
+
+// Print out all keyboard keys that are used to the console
+void print_helper_text()
+{
+    printf("\nKeyboard Commands:\n");
+    printf("Q - Exit Program\n");
+
+    printf("\n---------[Movement]---------\n");
+    printf("W - Move Forward\n");
+    printf("A - Move Left\n");
+    printf("S - Move Backward\n");
+    printf("D - Move Right\n");
+
+    printf("J - Rotate Left\n");
+    printf("L - Rotate Right\n");
+
+    printf("\n---------[Camera]---------\n");
+    printf("T - Topdown View\n");
+
+
+    printf("\n");
+    
 }
 
 void init(void)
@@ -509,7 +609,9 @@ void init(void)
     glEnableVertexAttribArray(vTexCoord);
     glVertexAttribPointer(vTexCoord, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * num_vertices));
 
-    ctm_location = glGetUniformLocation(program, "ctm");
+    current_transformation_matrix = glGetUniformLocation(program, "ctm");
+    model_view_location = glGetUniformLocation(program, "model_view");
+    projection_location = glGetUniformLocation(program, "projection");
 
     GLuint texture_location = glGetUniformLocation(program, "texture");
     glUniform1i(texture_location, 0);
@@ -524,7 +626,9 @@ void display(void)
 {
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    glUniformMatrix4fv(ctm_location, 1, GL_FALSE, (GLfloat*) &ctm);
+    glUniformMatrix4fv(current_transformation_matrix, 1, GL_FALSE, (GLfloat *) &ctm);
+    glUniformMatrix4fv(model_view_location, 1, GL_FALSE, (GLfloat *) &model_view);
+    glUniformMatrix4fv(projection_location, 1, GL_FALSE, (GLfloat *) &projection);
 
     glDrawArrays(GL_TRIANGLES, 0, num_vertices);
 
@@ -537,27 +641,114 @@ void keyboard(unsigned char key, int mousex, int mousey)
         case 'q':
             exit(0);
         case 'w':
-            // Move forward
+            x_pos += 2;
+            model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
+            printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
             break;
         case 'a':
-            // Turn left
+            // Move left
+            z_pos -= 2;
+            model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
+            printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
             break;
         case 'd':
+            // Move right
+            z_pos += 2;
+            model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
+            printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
+            break;
+        case 's':
+            // Move back
+            x_pos -= 2;
+            model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
+            printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
+            break;
+        case 'j':
+            // Turn left
+            break;
+        case 'l':
             // Turn right
             break;
+        case 't':
+            // Reset View
+            set_topdown_view();
+            break;
+        case 'p':
+            go_to_entrance();
     }
 
     glutPostRedisplay();
 }
 
 void mouse(int button, int state, int x, int y) {
-    ctm = m4_identity();
+    if(state == GLUT_DOWN && button == GLUT_LEFT_BUTTON) {
+        if(rotation_enabled)
+        {
+            float x_coordinate = (x * 2.0 / 1023.0) - 1;
+            float y_coordinate = -((y * 2.0 / 1023.0) - 1);
+            float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
 
-    glutPostRedisplay();
+            // Disable rotation if z is nan
+            rotation_enabled = isnan(z_coordinate) ? 0 : 1;
+
+            click_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
+            click_vector = normalize_v4(click_vector);
+        }
+    } 
+
+    if(state == GLUT_UP && button == GLUT_LEFT_BUTTON) {
+        previous_rotation_matrix = model_view;
+    }
     
 }
 
 void motion(int x, int y) {
+    if(rotation_enabled) {
+        float x_coordinate = (x * 2.0 / 1023.0) - 1;
+        float y_coordinate = -((y * 2.0 / 1023.0) - 1);
+        float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
+
+        // Disable rotation if z is nan
+        rotation_enabled = isnan(z_coordinate) ? 0 : 1;
+
+        vec4 drag_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
+        drag_vector = normalize_v4(drag_vector);
+
+        if(rotation_enabled) {
+            // Take the cross product to get the rotate about vector
+            vec4 rotation_vector = crossprod_v4(click_vector, drag_vector);
+            rotation_vector = normalize_v4(rotation_vector);
+
+            // If the subtraction results in a nan, don't rotate
+            if(isnan(rotation_vector.x) || isnan(rotation_vector.y) ||  isnan(rotation_vector.z) || isnan(rotation_vector.w)) return;
+
+            GLfloat ax = rotation_vector.x;
+            GLfloat ay = rotation_vector.y;
+            GLfloat az = rotation_vector.z;
+            GLfloat d = sqrt(pow(ay, 2) + pow(az, 2));
+
+            if(is_first_rotation){
+                previous_rotation_matrix = model_view;
+                is_first_rotation = 0;
+            }
+
+            //model_view = matrixmult_mat4(translation(-((left + right) / 2), -((bottom + top) / 2), -((near + far) / 2)), previous_rotation_matrix);
+            model_view = matrixmult_mat4(rotate_arbitrary_x(ay, az, d), previous_rotation_matrix);
+            model_view = matrixmult_mat4(rotate_arbitrary_y(ax, d), model_view);
+
+            float z_degrees = acos(dotprod_v4(click_vector, drag_vector)) * 180.0 / M_PI;
+            model_view = matrixmult_mat4(rotate_z(z_degrees), model_view);
+
+            model_view = matrixmult_mat4(transpose_mat4(rotate_arbitrary_y(ax, d)), model_view);
+            model_view = matrixmult_mat4(transpose_mat4(rotate_arbitrary_x(ay, az, d)), model_view);
+            //model_view = matrixmult_mat4(translation(((left + right) / 2), ((bottom + top) / 2), ((near + far) / 2)), model_view);
+        }
+        
+        else return;
+    }
+    else return;
+
+
     glutPostRedisplay();
 }
 
@@ -581,7 +772,9 @@ int main(int argc, char **argv)
     glutKeyboardFunc(keyboard);
     glutMouseFunc(mouse);
     glutMotionFunc(motion);
+    print_helper_text();
     glutMainLoop();
 
     return 0;
 }
+

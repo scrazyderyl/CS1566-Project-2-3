@@ -74,9 +74,6 @@ mat4 rotate_x(float degrees);
 mat4 rotate_y(float degrees);
 mat4 rotate_z(float degrees);
 
-// Ortho Projection
-mat4 ortho(GLfloat min_x, GLfloat max_x, GLfloat min_y, GLfloat max_y, GLfloat min_z, GLfloat max_z);
-
 // Arbitrary rotation functions
 mat4 rotate_arbitrary_x(GLfloat ay, GLfloat az, GLfloat d);
 mat4 rotate_arbitrary_y(GLfloat ax, GLfloat d);
@@ -85,6 +82,14 @@ mat4 rotate_arbitrary_y(GLfloat ax, GLfloat d);
 mat4 look_at(GLfloat eyex, GLfloat eyey, GLfloat eyez,
              GLfloat atx,  GLfloat aty,  GLfloat atz,
              GLfloat upx,  GLfloat upy,  GLfloat upz);
+
+mat4 ortho(GLfloat left, GLfloat right, 
+           GLfloat bottom, GLfloat top, 
+           GLfloat near, GLfloat far);
+           
+mat4 frustum(GLfloat left, GLfloat right, 
+           GLfloat bottom, GLfloat top, 
+           GLfloat near, GLfloat far);
 
 // Do not put anything after this line
 

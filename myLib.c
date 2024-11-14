@@ -392,17 +392,6 @@ mat4 rotate_z(float degrees) {
     return (mat4) {c1, c2, c3, c4};
 }
 
-mat4 ortho(GLfloat min_x, GLfloat max_x, GLfloat min_y, GLfloat max_y, GLfloat min_z, GLfloat max_z) {
-    GLfloat center_x = (max_x + min_x) / 2;
-    GLfloat center_y = (max_y + min_y) / 2;
-    GLfloat center_z = (max_z + min_z) / 2;
-
-    mat4 translation_matrix = translation(-center_x, -center_y, -center_z);
-    mat4 scale_matrix = scale(2 / (max_x - min_x), 2 / (max_y - min_y), 2 / (max_z - min_z));
-    
-    return matrixmult_mat4(scale_matrix, translation_matrix);
-}
-
 //---------------------Arbitrary rotation functions---------------------
 
 mat4 rotate_arbitrary_x(GLfloat ay, GLfloat az, GLfloat d) {
@@ -415,10 +404,59 @@ mat4 rotate_arbitrary_y(GLfloat ax, GLfloat d) {
 
 //---------------------Viewing functions---------------------
 
-//unfinished
 mat4 look_at(GLfloat eyex, GLfloat eyey, GLfloat eyez,
              GLfloat atx,  GLfloat aty,  GLfloat atz,
              GLfloat upx,  GLfloat upy,  GLfloat upz)
 {
-    return m4_identity(); // Will replace with look_at() implementation from slides
+    vec4 eye = (vec4) {eyex, eyey, eyez, 1.0};
+    vec4 at = (vec4) {atx, aty, atz, 1.0};
+    vec4 up = (vec4) {upx, upy, upz, 0};
+
+    vec4 new_z = normalize_v4(sub_v4(eye, at));
+    vec4 new_x = normalize_v4(crossprod_v4(up, new_z));
+    vec4 new_y = normalize_v4(crossprod_v4(new_z, new_x));
+
+    mat4 translation_matrix = translation(-eyex, -eyey, -eyez);
+    mat4 rotation_matrix = (mat4)  {{new_x.x, new_y.x, new_z.x, 0}, 
+                                    {new_x.y, new_y.y, new_z.y, 0}, 
+                                    {new_x.z, new_y.z, new_z.z, 0}, 
+                                    {0, 0, 0, 1}};
+
+    return matrixmult_mat4(rotation_matrix, translation_matrix);
+}
+
+mat4 ortho(GLfloat left, GLfloat right, 
+           GLfloat bottom, GLfloat top, 
+           GLfloat near, GLfloat far) 
+{
+    GLfloat center_x = (left + right) / 2;
+    GLfloat center_y = (bottom + top) / 2;
+    GLfloat center_z = (near + far) / 2;
+
+    mat4 translation_matrix = translation(-center_x, -center_y, -center_z);
+    mat4 scale_matrix = scale(2 / (right - left), 2 / (top - bottom), 2 / (near - far));
+    
+    return matrixmult_mat4(scale_matrix, translation_matrix);
+}
+
+mat4 frustum(GLfloat left, GLfloat right, 
+           GLfloat bottom, GLfloat top, 
+           GLfloat near, GLfloat far)
+{
+    mat4 H = (mat4) {{1, 0, 0, 0}, 
+                     {0, 1, 0, 0}, 
+                     {(left + right)/(-2 * near), (bottom + top)/(-2 * near), 1, 0}, 
+                     {0, 0, 0, 1}};
+
+    mat4 S = (mat4) {{(-2 * near)/(right - left), 0, 0, 0}, 
+                     {0, (-2 * near)/(top - bottom), 0, 0}, 
+                     {0, 0, 1, 0}, 
+                     {0, 0, 0, 1}};
+
+    mat4 N = (mat4) {{1, 0, 0, 0},
+                     {0, 1, 0, 0},
+                     {0, 0, (near + far) / (far - near), -1},
+                     {0, 0, -((2 * near * far)/(far - near)), 0}};
+
+    return matrixmult_mat4(N, matrixmult_mat4(S, H));
 }
