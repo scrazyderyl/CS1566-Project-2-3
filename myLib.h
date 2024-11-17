@@ -37,6 +37,7 @@ typedef struct {
 
 // Vector Functions
 void print_v4(vec4);
+int equal_v4(vec4 v1, vec4 v2);
 vec4 get_row(mat4 v, int r); //Custom function to get a row of a matrix
 vec4 mult_v4(vec4 v, GLfloat s);
 vec4 add_v4(vec4 v1, vec4 v2);
