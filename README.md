@@ -18,4 +18,5 @@ L - Rotate Right
 
 ## Camera
 T - Topdown View\
+R - Reset to Side View\
 E - Go to Entrance

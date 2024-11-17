@@ -95,6 +95,55 @@ GLfloat x_pos, y_pos, z_pos;
 // Variables to keep track of island mins and maxes
 int left, right, bottom, top, near, far;
 
+// Animation Variables
+int is_animating = 0;
+int current_step_count = 0; 
+int num_steps = 10; // Fragment animation into this number of steps
+vec4 current_pos, target_pos;
+
+// Sets the view to a towdown view of the maze
+void set_topdown_view() {
+    model_view = look_at(0, 0, 0, // eye
+                         0, -1, 0, // at
+                         0, 0, -1); // up
+
+    model_view = matrixmult_mat4(model_view, ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10)); // Scale to fit view
+
+    // Set the position of the viewer
+    current_pos = (vec4) {0.0, 0.0, 0.0, 0.0};
+
+    // No need for projection here, reset it
+    projection = m4_identity();
+
+    // Have the rotation remember that you're looking from the top now
+    previous_rotation_matrix = model_view;
+
+    // Re-enable Rotation
+    rotation_enabled = 1;
+}
+
+// Sets the view to the default side view
+void set_side_view() {
+
+    model_view = look_at(0, 0, 1, // eye
+                         0, 0, 0, // at
+                         0, 1, 0); // up
+
+    model_view = matrixmult_mat4(ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10), model_view);
+
+    // Set the position of the viewer
+    current_pos = (vec4) {0.0, 0.0, near, 0.0};
+
+    //projection = frustum(?????);
+    projection = m4_identity();
+
+    // Have the rotation remember that you're looking from the top now
+    previous_rotation_matrix = model_view;
+
+    // Re-enable Rotation
+    rotation_enabled = 1;
+}
+
 void define_blocks() {
     BLOCK_GRASS = (Block) { TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_TOP, TEXTURE_DIRT, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE };
     BLOCK_DIRT = (Block) { TEXTURE_DIRT, TEXTURE_DIRT, TEXTURE_DIRT, TEXTURE_DIRT, TEXTURE_DIRT, TEXTURE_DIRT };
@@ -351,9 +400,7 @@ void generate_world() {
     printf("Bottom: %d Top: %d\n", bottom, top);
     printf("Near: %d Far: %d\n", near, far);
 
-    model_view = ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10);
-
-
+    set_side_view();
 
     // Allocate arrays
     positions = (vec4 *) malloc(sizeof(vec4) * num_vertices);
@@ -484,8 +531,8 @@ void prompt_maze_size() {
     // Ask for input and generate maze
     printf("Enter width and the height for the size of the maze (ex. 6 8)\n");
 
-    width = 10;
-    height = 10;
+    width = 6;
+    height = 6;
 
     if (1)
     //if(scanf("%d %d", &width, &height) > 0 && width > 0 && height > 0)
@@ -507,33 +554,26 @@ void prompt_maze_size() {
     }
 }
 
-// Sets the view to a towdown view of the maze
-void set_topdown_view() {
-    model_view = look_at(0, 0, 0, // eye
-                         0, -1, 0, // at
-                         0, 0, -1); // up
-
-    model_view = matrixmult_mat4(model_view, ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10)); // Scale to fit view
-
-    // No need for projection here, reset it
-    projection = m4_identity();
-
-    // Have the rotation remember that you're looking from the top now
-    previous_rotation_matrix = model_view;
-
-    // Re-enable Rotation
-    rotation_enabled = 1;
-}
-
 void go_to_entrance()
 {
     ctm = m4_identity();
+
+    // Set the positions to the entrance
     x_pos = 0.5;
     y_pos = 3.5;
     z_pos = 2.5;
+
+    target_pos = (vec4) {x_pos, y_pos, z_pos, 0.0};
+
+    current_step_count = 0;
+    is_animating = 1;
+
     // model_view = look_at(0, 2, 0, 1, 2, 0, 0, 1, 0);
     model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
+
     projection = frustum(-1, 1, 0, 2, -1, -150);
+
+    // Disable rotation since we don't need it
     rotation_enabled = 0;
 }
 
@@ -554,6 +594,7 @@ void print_helper_text()
 
     printf("\n---------[Camera]---------\n");
     printf("T - Topdown View\n");
+    printf("R - Reset to Side View\n");
     printf("E - Go to Entrance\n");
 
 
@@ -628,7 +669,9 @@ void init(void)
 
 void display(void)
 {
+    glClearColor(120.0/255.0, 167.0/255.0, 1.0, 1.0); // Set clear color to the minecraft sky color
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
 
     glUniformMatrix4fv(current_transformation_matrix, 1, GL_FALSE, (GLfloat *) &ctm);
     glUniformMatrix4fv(model_view_location, 1, GL_FALSE, (GLfloat *) &model_view);
@@ -641,47 +684,77 @@ void display(void)
 
 void keyboard(unsigned char key, int mousex, int mousey)
 {
-    switch(key) {
-        case 'q':
-            exit(0);
-        case 'w':
-            x_pos += 2;
-            model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-            printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
-            break;
-        case 'a':
-            // Move left
-            z_pos -= 2;
-            model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-            printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
-            break;
-        case 'd':
-            // Move right
-            z_pos += 2;
-            model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-            printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
-            break;
-        case 's':
-            // Move back
-            x_pos -= 2;
-            model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-            printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
-            break;
-        case 'j':
-            // Turn left
-            break;
-        case 'l':
-            // Turn right
-            break;
-        case 't':
-            // Reset View
-            set_topdown_view();
-            break;
-        case 'e':
-            go_to_entrance();
-    }
+    // If we're animating, don't accept keyboard commands
+    if(! is_animating)
+    {
+        switch(key) 
+        {
+            case 'q':
+                exit(0);
+            case 'w':
+                x_pos += 2;
+                target_pos = add_v4(current_pos, (vec4) {2.0, 0.0, 0.0, 0.0}); 
+                //model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
+                printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
+                current_step_count = 0;
+                is_animating = 1;
+                break;
+            case 'a':
+                // Move left
+                z_pos -= 2;
+                target_pos = add_v4(current_pos, (vec4) {0.0, 0.0, -2.0, 0.0}); 
+                //model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
+                printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
+                current_step_count = 0;
+                is_animating = 1;
+                break;
+            case 'd':
+                // Move right
+                z_pos += 2;
+                target_pos = add_v4(current_pos, (vec4) {0.0, 0.0, 2.0, 0.0}); 
+                //model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
+                printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
+                current_step_count = 0;
+                is_animating = 1;
+                break;
+            case 's':
+                // Move back
+                x_pos -= 2;
+                target_pos = add_v4(current_pos, (vec4) {-2.0, 0.0, 0.0, 0.0}); 
+                //model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
+                printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
+                current_step_count = 0;
+                is_animating = 1;
+                break;
+            case 'j':
+                // Turn left
+                break;
+            case 'l':
+                // Turn right
+                break;
+            case 't':
+                // Reset View
+                set_topdown_view();
+                break;
+            case 'e':
+                go_to_entrance();
+                break;
+            case 'r':
+                set_side_view();
+                break;
+            case 'm':
+                // Move back
+                y_pos += 2;
+                target_pos = add_v4(current_pos, (vec4) {0.0, 2.0, 0.0, 0.0}); 
+                //model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
+                printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
+                current_step_count = 0;
+                is_animating = 1;
+                break;
+        }
 
     glutPostRedisplay();
+    }
 }
 
 void mouse(int button, int state, int x, int y) {
@@ -691,9 +764,6 @@ void mouse(int button, int state, int x, int y) {
             float x_coordinate = (x * 2.0 / 1023.0) - 1;
             float y_coordinate = -((y * 2.0 / 1023.0) - 1);
             float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
-
-            // Disable rotation if z is nan
-            rotation_enabled = isnan(z_coordinate) ? 0 : 1;
 
             click_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
             click_vector = normalize_v4(click_vector);
@@ -707,18 +777,19 @@ void mouse(int button, int state, int x, int y) {
 }
 
 void motion(int x, int y) {
-    if(rotation_enabled) {
+    if(rotation_enabled) 
+    {
         float x_coordinate = (x * 2.0 / 1023.0) - 1;
         float y_coordinate = -((y * 2.0 / 1023.0) - 1);
         float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
 
         // Disable rotation if z is nan
-        rotation_enabled = isnan(z_coordinate) ? 0 : 1;
+        if(isnan(z_coordinate) == 1) return;
 
         vec4 drag_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
         drag_vector = normalize_v4(drag_vector);
 
-        if(rotation_enabled) {
+        
             // Take the cross product to get the rotate about vector
             vec4 rotation_vector = crossprod_v4(click_vector, drag_vector);
             rotation_vector = normalize_v4(rotation_vector);
@@ -746,14 +817,43 @@ void motion(int x, int y) {
             model_view = matrixmult_mat4(transpose_mat4(rotate_arbitrary_y(ax, d)), model_view);
             model_view = matrixmult_mat4(transpose_mat4(rotate_arbitrary_x(ay, az, d)), model_view);
             //model_view = matrixmult_mat4(translation(((left + right) / 2), ((bottom + top) / 2), ((near + far) / 2)), model_view);
-        }
-        
-        else return;
     }
     else return;
 
 
     glutPostRedisplay();
+}
+
+void idle(void)
+{
+    if(is_animating)
+    {
+        // Are the start and end positions the same?
+        if(equal_v4(target_pos, current_pos))
+        {
+            is_animating = 0;
+            current_step_count = num_steps;
+        }
+        // Are we at the target yet?
+        else if(current_step_count == num_steps)
+        {
+            current_pos = target_pos;
+            model_view = look_at(target_pos.x, target_pos.y, target_pos.z, target_pos.x + 1, target_pos.y - 1, target_pos.z, 0, 1, 0);
+
+            // Arrived at destination, no longer animating
+            is_animating = 0;
+        }
+        else
+        {
+            vec4 move_vector = sub_v4(target_pos, current_pos);
+            vec4 delta = mult_v4(move_vector, (float) current_step_count / num_steps);
+            vec4 temp_pos = add_v4(current_pos, delta);
+            model_view = look_at(temp_pos.x, temp_pos.y, temp_pos.z, temp_pos.x + 1, temp_pos.y - 1, temp_pos.z, 0, 1, 0);
+            translation(temp_pos.x, temp_pos.y, temp_pos.z);
+            current_step_count++;
+        }
+        glutPostRedisplay();
+    }
 }
 
 int main(int argc, char **argv)
@@ -776,6 +876,7 @@ int main(int argc, char **argv)
     glutKeyboardFunc(keyboard);
     glutMouseFunc(mouse);
     glutMotionFunc(motion);
+    glutIdleFunc(idle);
     print_helper_text();
     glutMainLoop();
 

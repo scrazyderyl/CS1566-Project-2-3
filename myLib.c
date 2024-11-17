@@ -28,6 +28,12 @@ void print_v4(vec4 v) {
     printf("[ %7.3f %7.3f %7.3f %7.3f ]\n", v.x, v.y, v.z, v.w);
 }
 
+// Checks if two vec4s are equal
+int equal_v4(vec4 v1, vec4 v2)
+{
+    return (v1.x == v2.x && v1.y == v2.y && v1.z == v2.z);
+}
+
 vec4 mult_v4(vec4 v, GLfloat s) {
     vec4 result =  {(v.x * s), 
                     (v.y * s), 
