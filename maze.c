@@ -36,6 +36,12 @@ typedef struct {
     vec2 z_neg;
 } Block;
 
+typedef struct Coordinate{
+    int x;
+    int y;
+    struct Coordinate* next;
+} Coordinate;
+
 vec2 TEXTURE_GRASS_TOP = { 0, 0 };
 vec2 TEXTURE_STONE_BRICKS = { 0, 1 };
 vec2 TEXTURE_POLISHED_GRANITE = { 0, 2 };
@@ -69,6 +75,9 @@ float TEX_SIZE = 0.25;
 Cell **maze;
 int width;
 int height;
+
+struct Coordinate *list;
+struct Coordinate *current;
 
 size_t num_vertices;
 size_t vertex_index = 0;
@@ -577,6 +586,135 @@ void go_to_entrance()
     rotation_enabled = 0;
 }
 
+//0 is top
+//1 is left
+//2 is bottom
+//3 is right    
+int dfs_recursive(Cell loc, int loc_x, int loc_y, int dir) {
+    
+    struct Coordinate *nextCoor = (struct Coordinate *) malloc(sizeof(Coordinate));
+    nextCoor->x = loc_x;
+    nextCoor->y = loc_y;
+    if(loc_x == 0 && loc_y == 0) {
+        list = nextCoor;
+        current = list;
+    }
+    else {
+        current->next = nextCoor;
+        current = current->next;
+    }
+    printf(" t(%d,%d)\n", current->x, current->y);
+    // current = curr;
+    if(loc_x == width-1 && loc_y == height-1) {
+        printf("Found exit");
+        return 1;
+    }
+    // if(dir == 0 && loc.left == 1 && loc.right == 1 && loc.bottom == 1) {
+    //     printf("Dead end 1");
+    //     return 0;
+    // }
+    // if(dir == 1 && loc.top == 1 && loc.right == 1 && loc.bottom == 1) {
+    //     printf("Dead end 2");
+    //     return 0;
+    // }
+    // if(dir == 2 && loc.left == 1 && loc.right == 1 && loc.top == 1) {
+    //     printf("Dead end 3");
+    //     return 0;
+    // }
+    // if(dir == 3 && loc.left == 1 && loc.top == 1 && loc.bottom == 1) {
+    //     printf("Dead end 4");
+    //     return 0;
+    // }
+
+    int found = 0;
+    if(loc_y > 0 && loc.top == 0 && dir != 2) {
+        printf("Move top");
+        printf("(%d,%d)\n", current->x, current->y);
+        found = dfs_recursive(maze[loc_x][loc_y-1], loc_x, loc_y-1, 0);
+        printf(" (%d,%d)\n", current->x, current->y);
+    }
+    if(found != 1 && loc_y < height-1 && loc.bottom == 0 && dir != 0) {
+        printf("Move bottom");
+        printf("x=%d, y=%d\n", loc_x, loc_y);
+        if(current->x != loc_x || current->y != loc_y) {
+            struct Coordinate *copy = (struct Coordinate *) malloc(sizeof(Coordinate));
+            copy->x = loc_x;
+            copy->y = loc_y;
+            current->next = copy;
+            current = current->next;
+            printf("(%d,%d)\n", current->x, current->y);
+        }
+        found = dfs_recursive(maze[loc_x][loc_y+1], loc_x, loc_y+1, 2);
+        printf(" (%d,%d)\n", current->x, current->y);
+    }
+    if(found != 1 && loc_x > 0 && loc.left == 0 && dir != 3) {
+        printf("Move left");
+        printf("x=%d, y=%d\n", loc_x, loc_y);
+        if(current->x != loc_x || current->y != loc_y) {
+            struct Coordinate *copy = (struct Coordinate *) malloc(sizeof(Coordinate));
+            copy->x = loc_x;
+            copy->y = loc_y;
+            current->next = copy;
+            current = current->next;
+            printf(" (%d,%d)\n", current->x, current->y);
+        }
+        found = dfs_recursive(maze[loc_x-1][loc_y], loc_x-1, loc_y, 1);
+        printf("(%d,%d)\n", current->x, current->y);
+    }
+    if(found != 1 && loc_x < width-1 && loc.right == 0 && dir != 1) {
+        printf("Move right");
+        printf("x=%d, y=%d\n", loc_x, loc_y);
+        if(current->x != loc_x || current->y != loc_y) {
+            struct Coordinate *copy = (struct Coordinate *) malloc(sizeof(Coordinate));
+            copy->x = loc_x;
+            copy->y = loc_y;
+            current->next = copy;
+            current = current->next;
+            printf(" (%d,%d)\n", current->x, current->y);
+        }
+        found = dfs_recursive(maze[loc_x+1][loc_y], loc_x+1, loc_y, 3);
+        printf("(%d,%d)\n", current->x, current->y);
+    }
+    printf("x=%d, y=%d\n", loc_x, loc_y);
+    if(found != 1 && (current->x != loc_x || current->y != loc_y)) {
+        struct Coordinate *currCoor = (struct Coordinate *) malloc(sizeof(Coordinate));
+        currCoor->x = loc_x;
+        currCoor->y = loc_y;
+        current->next = currCoor;
+        current = current->next;
+        printf("c(%d,%d)\n", current->x, current->y);
+    }
+
+    return found;
+
+
+
+}
+
+void dfs() {
+    Cell start = maze[0][0];
+    int found = dfs_recursive(start, 0, 0, 3);
+}
+
+void print_list() {
+    //printf("Entering print");
+    current = list;
+    //printf("(%d,%d), ", list->x, list->y);
+    while (current->x != width-1 || current->y != height-1) {
+        printf("(%d,%d), ", current->x, current->y);
+        current = current->next;
+    }
+    printf("(%d,%d) ", current->x, current->y);
+    printf("\n");
+}
+
+// Coordinate* coor_copy(Coordinate *original) {
+//     struct Coordinate *copy = (struct Coordinate *) malloc(sizeof(Coordinate));
+//     copy->x = original->x;
+//     copy->y = original->y;
+//     return copy;
+// }
+
 // Print out all keyboard keys that are used to the console
 void print_helper_text()
 {
@@ -751,6 +889,10 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 current_step_count = 0;
                 is_animating = 1;
                 break;
+            case 'p':
+                dfs();
+                //printf("(%d,%d), ", list->next->x, list->next->y);
+                print_list();
         }
 
     glutPostRedisplay();
