@@ -59,17 +59,37 @@ Block BLOCK_BIRCH_PLANKS;
 Block BLOCK_BRICKS;
 Block BLOCK_STONE_BRICKS;
 
-int ISLAND_PADDING = 6;
-int CELL_SIZE = 3;
-int WALL_HEIGHT = 5;
-int REMOVE_DIST = 2;
+#define get_left_direction(direction) (direction == 0 ? 3 : direction - 1)
+#define get_right_direction(direction) (direction == 3 ? 0 : direction + 1)
+#define get_behind_direction(direction) (direction < 2 ? direction + 2 : direction - 2)
 
+typedef struct Coordinates_ {
+    int x;
+    int y;
+    struct Coordinates_ *next;
+} Coordinates;
+
+// Generation parameters
+#define ISLAND_PADDING 6
+#define CELL_SIZE 3
+#define CELL_SIZE_WITH_WALLS 4
+#define WALL_HEIGHT 5
+#define REMOVE_DIST 2
+
+// Texture constants
 float TEX_SIZE = 0.25;
 
+// Maze
 Cell **maze;
-int width;
-int height;
+int maze_width;
+int maze_height;
+int left, right, bottom, top, near, far; // Island bounds
 
+int maze_x;
+int maze_y;
+int player_facing; // 0: Pos x, 1: Pos y, 2: Neg x, 3: Neg y 
+ 
+// OpenGL
 size_t num_vertices;
 size_t vertex_index = 0;
 vec4 *positions;
@@ -89,11 +109,6 @@ vec4 click_vector;
 mat4 previous_rotation_matrix;
 int rotation_enabled = 1;
 int is_first_rotation = 1;
-
-GLfloat x_pos, y_pos, z_pos;
-
-// Variables to keep track of island mins and maxes
-int left, right, bottom, top, near, far;
 
 // Animation Variables
 int is_animating = 0;
@@ -358,8 +373,8 @@ void generate_maze_wall(int x, int z, Block block) {
 
 void generate_world() {
     // Calculate max number of vertices without missing blocks
-    int maze_x_size = width * (CELL_SIZE + 1) + 1;
-    int maze_z_size = height * (CELL_SIZE + 1) + 1;
+    int maze_x_size = maze_width * CELL_SIZE_WITH_WALLS + 1;
+    int maze_z_size = maze_height * CELL_SIZE_WITH_WALLS + 1;
 
     int total_x_size = ISLAND_PADDING * 2 + maze_x_size;
     int total_z_size = ISLAND_PADDING * 2 + maze_z_size;
@@ -369,7 +384,7 @@ void generate_world() {
     printf("X: %d, Y: %d Z: %d\n", total_x_size, total_y_size, total_z_size);
 
     size_t maze_floor_blocks = maze_x_size * maze_z_size;
-    size_t maze_walls_blocks = ((height + 1) * (width + 1) + (height * (width + 1) + width * (height + 1) - width * height - 1) * CELL_SIZE) * WALL_HEIGHT;
+    size_t maze_walls_blocks = ((maze_height + 1) * (maze_width + 1) + (maze_height * (maze_width + 1) + maze_width * (maze_height + 1) - maze_width * maze_height - 1) * CELL_SIZE) * WALL_HEIGHT;
     size_t island_blocks = total_x_size * total_z_size * (REMOVE_DIST + (island_smaller_side + 1) / 2); // Not correct, should be 34662 for 10x10 maze
     // num_vertices = (maze_floor_blocks + maze_walls_blocks + island_blocks) * 36;
     num_vertices = (maze_floor_blocks + maze_walls_blocks + island_blocks + 10) * 36; // This is for the testing boundary blocks. DELETE BEFORE TURNING IN!!!!!
@@ -469,15 +484,15 @@ void generate_world() {
     int bottom_pos = maze_z_size - 1;
 
     // For each row
-    for (int y = 0; y < height; y++) {
-        int z_pos = y * (CELL_SIZE + 1);
+    for (int y = 0; y < maze_height; y++) {
+        int z_pos = y * CELL_SIZE_WITH_WALLS;
 
         Cell cell;
 
         // Top wall
-        for (int x = 0; x < width; x++) {
+        for (int x = 0; x < maze_width; x++) {
             cell = maze[x][y];
-            int x_pos = x * (CELL_SIZE + 1);
+            int x_pos = x * CELL_SIZE_WITH_WALLS;
 
             generate_maze_wall(x_pos, z_pos, BLOCK_STONE_BRICKS);
 
@@ -507,9 +522,9 @@ void generate_world() {
     }
 
     // Bottom of maze
-    for (int x = 0; x < width; x++) {
-        Cell cell = maze[x][height - 1];
-        int x_pos = x * (CELL_SIZE + 1);
+    for (int x = 0; x < maze_width; x++) {
+        Cell cell = maze[x][maze_height - 1];
+        int x_pos = x * CELL_SIZE_WITH_WALLS;
 
         generate_maze_wall(x_pos, bottom_pos, BLOCK_STONE_BRICKS);
     
@@ -531,50 +546,27 @@ void prompt_maze_size() {
     // Ask for input and generate maze
     printf("Enter width and the height for the size of the maze (ex. 6 8)\n");
 
-    width = 6;
-    height = 6;
+    maze_width = 6;
+    maze_height = 6;
 
     if (1)
-    //if(scanf("%d %d", &width, &height) > 0 && width > 0 && height > 0)
+    //if(scanf("%d %d", &maze_width, &maze_height) > 0 && maze_width > 0 && maze_height > 0)
     {
-        maze = malloc(width * sizeof(Cell *));
+        maze = malloc(maze_width * sizeof(Cell *));
 
-        for (int i = 0; i < width; i++) {
-            maze[i] = malloc(height * sizeof(Cell));
+        for (int i = 0; i < maze_width; i++) {
+            maze[i] = malloc(maze_height * sizeof(Cell));
         }
 
-        printf("Width: %d Height: %d\n", width, height);
-        generate_maze(maze, width, height);
-        print_maze(maze, width, height);
+        printf("Width: %d Height: %d\n", maze_width, maze_height);
+        generate_maze(maze, maze_width, maze_height);
+        print_maze(maze, maze_width, maze_height);
     }
     else
     {
         printf("\nInvalid Input! Exiting...\n");
         exit(1);
     }
-}
-
-void go_to_entrance()
-{
-    ctm = m4_identity();
-
-    // Set the positions to the entrance
-    x_pos = 0.5;
-    y_pos = 3.5;
-    z_pos = 2.5;
-
-    target_pos = (vec4) {x_pos, y_pos, z_pos, 0.0};
-
-    current_step_count = 0;
-    is_animating = 1;
-
-    // model_view = look_at(0, 2, 0, 1, 2, 0, 0, 1, 0);
-    model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-
-    projection = frustum(-1, 1, 0, 2, -1, -150);
-
-    // Disable rotation since we don't need it
-    rotation_enabled = 0;
 }
 
 // Print out all keyboard keys that are used to the console
@@ -682,6 +674,116 @@ void display(void)
     glutSwapBuffers();
 }
 
+mat4 get_model_view(vec4 position, int facing) {
+    float x = position.x;
+    float y = position.y;
+    float z = position.z;
+
+    switch (facing) {
+        case 0:
+            return look_at(x, y, z, x + 1, y - 1, z, 0, 1, 0);
+        case 1:
+            return look_at(x, y, z, x, y - 1, z + 1, 0, 1, 0);
+        case 2:
+            return look_at(x, y, z, x - 1, y - 1, z, 0, 1, 0);
+        case 3:
+            return look_at(x, y, z, x, y - 1, z - 1, 0, 1, 0);
+    }
+}
+
+void start_animation() {
+    current_step_count = 0;
+    is_animating = 1;
+}
+
+void move_to(vec4 position) {
+    target_pos = position;
+    start_animation();
+}
+
+void turn_to(int direction) {
+    if (rotation_enabled) {
+        return;
+    }
+
+    player_facing = direction;
+    model_view = get_model_view(current_pos, player_facing);
+    start_animation();
+}
+
+void move_to_cell(int x, int y) {
+    maze_x = x;
+    maze_y = y;
+
+    vec4 position = {
+        ((float)x + 0.5) * (float)CELL_SIZE_WITH_WALLS + 0.5,
+        3.5,
+        ((float)y + 0.5) * (float)CELL_SIZE_WITH_WALLS + 0.5,
+        0
+    };
+
+    move_to(position);
+}
+
+void move_direction(int direction) {
+    if (rotation_enabled) {
+        return;
+    }
+
+    switch (direction) {
+        case 0:
+            // Pos x
+            if (maze_y >= 0 && maze_y < maze_height &&
+                (maze_x == -1 && maze[0][maze_y].left ||
+                maze_x >= 0 && maze_x < maze_width && maze[maze_x][maze_y].right)) {
+                return; // Collision
+            }
+
+            move_to_cell(maze_x + 1, maze_y);
+            break;
+        case 1:
+            // Pos y
+            if (maze_x >= 0 && maze_x < maze_width &&
+                (maze_y == -1 && maze[maze_x][0].top ||
+                maze_y >= 0 && maze_y < maze_height && maze[maze_x][maze_y].bottom)) {
+                return; // Collision
+            }
+
+            move_to_cell(maze_x, maze_y + 1);
+            break;
+        case 2:
+            // Neg x
+            if (maze_y >= 0 && maze_y < maze_height &&
+                (maze_x == maze_width && maze[maze_width - 1][maze_y].right ||
+                maze_x >= 0 && maze_x < maze_width && maze[maze_x][maze_y].left)) {
+                return; // Collision
+            }
+
+            move_to_cell(maze_x - 1, maze_y);
+            break;
+        case 3:
+            // Neg y
+            if (maze_x >= 0 && maze_x < maze_width &&
+                (maze_y == maze_height && maze[maze_x][maze_height - 1].bottom ||
+                maze_y >= 0 && maze_y < maze_height && maze[maze_x][maze_y].top)) {
+                return; // Collision
+            }
+            
+            move_to_cell(maze_x, maze_y - 1);
+            break;
+    }
+}
+
+void go_to_entrance()
+{
+    // Disable rotation since we don't need it
+    rotation_enabled = 0;
+
+    model_view = get_model_view(current_pos, player_facing);
+    projection = frustum(-1, 1, 0, 2, -1, -150);
+    move_to_cell(-1, 0);
+}
+
 void keyboard(unsigned char key, int mousex, int mousey)
 {
     // If we're animating, don't accept keyboard commands
@@ -692,45 +794,22 @@ void keyboard(unsigned char key, int mousex, int mousey)
             case 'q':
                 exit(0);
             case 'w':
-                x_pos += 2;
-                target_pos = add_v4(current_pos, (vec4) {2.0, 0.0, 0.0, 0.0}); 
-                //model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-                printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
-                current_step_count = 0;
-                is_animating = 1;
+                move_direction(player_facing);
                 break;
             case 'a':
-                // Move left
-                z_pos -= 2;
-                target_pos = add_v4(current_pos, (vec4) {0.0, 0.0, -2.0, 0.0}); 
-                //model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-                printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
-                current_step_count = 0;
-                is_animating = 1;
-                break;
-            case 'd':
-                // Move right
-                z_pos += 2;
-                target_pos = add_v4(current_pos, (vec4) {0.0, 0.0, 2.0, 0.0}); 
-                //model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-                printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
-                current_step_count = 0;
-                is_animating = 1;
+                move_direction(get_left_direction(player_facing));
                 break;
             case 's':
-                // Move back
-                x_pos -= 2;
-                target_pos = add_v4(current_pos, (vec4) {-2.0, 0.0, 0.0, 0.0}); 
-                //model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-                printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
-                current_step_count = 0;
-                is_animating = 1;
+                move_direction(get_behind_direction(player_facing));
+                break;
+            case 'd':
+                move_direction(get_right_direction(player_facing));
                 break;
             case 'j':
-                // Turn left
+                turn_to(get_left_direction(player_facing));
                 break;
             case 'l':
-                // Turn right
+                turn_to(get_right_direction(player_facing));
                 break;
             case 't':
                 // Reset View
@@ -742,18 +821,9 @@ void keyboard(unsigned char key, int mousex, int mousey)
             case 'r':
                 set_side_view();
                 break;
-            case 'm':
-                // Move back
-                y_pos += 2;
-                target_pos = add_v4(current_pos, (vec4) {0.0, 2.0, 0.0, 0.0}); 
-                //model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-                printf("X: %f Y: %f, Z: %f\n", x_pos, y_pos, z_pos);
-                current_step_count = 0;
-                is_animating = 1;
-                break;
         }
 
-    glutPostRedisplay();
+        glutPostRedisplay();
     }
 }
 
@@ -838,7 +908,7 @@ void idle(void)
         else if(current_step_count == num_steps)
         {
             current_pos = target_pos;
-            model_view = look_at(target_pos.x, target_pos.y, target_pos.z, target_pos.x + 1, target_pos.y - 1, target_pos.z, 0, 1, 0);
+            model_view = get_model_view(current_pos, player_facing);
 
             // Arrived at destination, no longer animating
             is_animating = 0;
@@ -848,7 +918,7 @@ void idle(void)
             vec4 move_vector = sub_v4(target_pos, current_pos);
             vec4 delta = mult_v4(move_vector, (float) current_step_count / num_steps);
             vec4 temp_pos = add_v4(current_pos, delta);
-            model_view = look_at(temp_pos.x, temp_pos.y, temp_pos.z, temp_pos.x + 1, temp_pos.y - 1, temp_pos.z, 0, 1, 0);
+            model_view = get_model_view(temp_pos, player_facing);
             translation(temp_pos.x, temp_pos.y, temp_pos.z);
             current_step_count++;
         }
