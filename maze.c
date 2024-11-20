@@ -378,32 +378,36 @@ void generate_world() {
 
     int total_x_size = ISLAND_PADDING * 2 + maze_x_size;
     int total_z_size = ISLAND_PADDING * 2 + maze_z_size;
-    int island_smaller_side = maze_x_size < maze_z_size ? maze_x_size : maze_z_size;
-    int total_y_size = 1 + WALL_HEIGHT + (island_smaller_side + 1) / 2;
 
-    printf("X: %d, Y: %d Z: %d\n", total_x_size, total_y_size, total_z_size);
+    int island_smaller_side;
+    int island_larger_side;
+    
+    if (total_x_size < total_z_size) {
+        island_smaller_side = total_x_size;
+        island_larger_side = total_z_size;
+    } else {
+        island_smaller_side = total_z_size;
+        island_larger_side = total_x_size;
+    }
+    
+    int island_height = (island_smaller_side + 1) / 2;
+    int total_y_size = 1 + WALL_HEIGHT + island_height;
 
     size_t maze_floor_blocks = maze_x_size * maze_z_size;
     size_t maze_walls_blocks = ((maze_height + 1) * (maze_width + 1) + (maze_height * (maze_width + 1) + maze_width * (maze_height + 1) - maze_width * maze_height - 1) * CELL_SIZE) * WALL_HEIGHT;
-    size_t island_blocks = total_x_size * total_z_size * (REMOVE_DIST + (island_smaller_side + 1) / 2); // Not correct, should be 34662 for 10x10 maze
+    size_t island_blocks = total_x_size * total_z_size * (REMOVE_DIST + 1);
+
+    int long_length = island_larger_side;
+
+    for (int short_length = island_smaller_side; short_length > 0; short_length -= 2) {
+        island_blocks += long_length * short_length;
+        long_length -= 2;
+    }
+
     // num_vertices = (maze_floor_blocks + maze_walls_blocks + island_blocks) * 36;
     num_vertices = (maze_floor_blocks + maze_walls_blocks + island_blocks + 10) * 36; // This is for the testing boundary blocks. DELETE BEFORE TURNING IN!!!!!
 
-    // Center x and z and scale
-    int max = total_x_size;
-
-    if (total_y_size > max) {
-        max = total_y_size;
-    }
-
-    if (total_z_size > max) {
-        max = total_z_size;
-    }
-
-    // model_view = translation((float)(total_x_size - 2 * ISLAND_PADDING) / -2, 0, (float)(total_z_size - 2 * ISLAND_PADDING) / -2);
-    // float scale_factor = 1 / (float)max;
-    // model_view = matrixmult_mat4(scale(scale_factor, scale_factor, scale_factor), model_view);
-
+    // Store bounds
     left = -ISLAND_PADDING;
     right = total_x_size - ISLAND_PADDING;
     bottom = -total_y_size - 2;
@@ -411,6 +415,7 @@ void generate_world() {
     near = total_z_size - ISLAND_PADDING;
     far = -ISLAND_PADDING;
 
+    printf("X: %d, Y: %d Z: %d\n", total_x_size, total_y_size, total_z_size);
     printf("Left: %d Right: %d\n", left, right);
     printf("Bottom: %d Top: %d\n", bottom, top);
     printf("Near: %d Far: %d\n", near, far);
