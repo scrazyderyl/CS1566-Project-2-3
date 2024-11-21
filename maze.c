@@ -22,6 +22,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 #include <math.h>
 #include "initShader.h"
 #include "myLib.h"
@@ -38,10 +39,10 @@ typedef struct {
     vec2 z_neg;
 } Block;
 
-typedef struct Coordinate{
+typedef struct Coordinate {
     int x;
     int y;
-    struct Coordinate* next;
+    struct Coordinate *next;
 } Coordinate;
 
 vec2 TEXTURE_GRASS_TOP = { 0, 0 };
@@ -70,12 +71,6 @@ Block BLOCK_STONE_BRICKS;
 #define get_left_direction(direction) (direction == 0 ? 3 : direction - 1)
 #define get_right_direction(direction) (direction == 3 ? 0 : direction + 1)
 #define get_behind_direction(direction) (direction < 2 ? direction + 2 : direction - 2)
-
-typedef struct Coordinates_ {
-    int x;
-    int y;
-    struct Coordinates_ *next;
-} Coordinates;
 
 // Generation parameters
 #define ISLAND_PADDING 6
@@ -613,6 +608,7 @@ int dfs_recursive(Cell loc, int loc_x, int loc_y, int dir) {
     printf(" t(%d,%d)\n", current_step->x, current_step->y);
     // current = curr;
     if(loc_x == maze_width-1 && loc_y == maze_height-1) {
+        current_step->next = NULL;
         printf("Found exit");
         return 1;
     }
@@ -920,7 +916,7 @@ void move_direction(int direction) {
             break;
     }
 
-    // start_animation();
+    start_animation();
 }
 
 void turn(int direction) {
@@ -930,7 +926,68 @@ void turn(int direction) {
 
     player_facing = direction;
     turn_to(direction);
-    // start_animation();
+    start_animation();
+}
+
+void do_maze_step() {
+    if (current_step == NULL) {
+        return;
+    }
+    
+    // Turn to exit if at end
+    if (current_step->next == NULL) {
+        if (player_facing != 0) {
+            turn_to(0);
+            start_animation();
+        }
+
+        current_step = NULL;
+        return;
+    }
+
+    Coordinate *next = current_step->next;
+
+    // Calculate direction
+    int new_direction;
+    int dx = next->x - current_step->x;
+    int dy = next->y - current_step->y;
+
+    if (dx == 1) {
+        new_direction = 0;
+    } else if (dy == 1) {
+        new_direction = 1;
+    } else if (dx == -1) {
+        new_direction = 2;
+    } else if (dy == -1) {
+        new_direction = 3;
+    }
+    
+    // Turn if not facing
+    if (player_facing != new_direction) {
+        turn(new_direction);
+    } else {
+        // Move
+        move_to_cell(next->x, next->y);
+        current_step = next;
+    }
+
+    start_animation();
+}
+
+void free_path() {
+    current_step = path;
+
+    while (current_step != NULL) {
+        Coordinate *next = current_step->next;
+        free(current_step);
+        current_step = next;
+    }
+}
+
+void navigate() {
+    current_step = path;
+    do_maze_step();
+    start_animation();
 }
 
 void go_to_entrance()
@@ -980,9 +1037,15 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 set_side_view();
                 break;
             case 'p':
+                if (rotation_enabled) {
+                    return;
+                }
+
+                free_path();
                 dfs();
                 //printf("(%d,%d), ", list->next->x, list->next->y);
                 print_list();
+                navigate();
                 break;
         }
 
@@ -1070,31 +1133,32 @@ void idle(void)
         // Are we at the target yet?
         else if(current_step_count == num_steps)
         {
-            current_pos = target_pos;
-            model_view = look_at(target_pos.eye.x, target_pos.eye.y, target_pos.eye.z, 
-                                 target_pos.at.x, target_pos.at.y, target_pos.at.z, 
-                                 target_pos.up.x, target_pos.up.y, target_pos.up.z);
+            // current_pos = target_pos;
+            // model_view = look_at(target_pos.eye.x, target_pos.eye.y, target_pos.eye.z, 
+            //                      target_pos.at.x, target_pos.at.y, target_pos.at.z, 
+            //                      target_pos.up.x, target_pos.up.y, target_pos.up.z);
 
             // Arrived at destination, no longer animating
             is_animating = 0;
+            do_maze_step();
         }
         else
         {
-            vec4 eye_move_vector = sub_v4(target_pos.eye, current_pos.eye);
-            vec4 eye_delta = mult_v4(eye_move_vector, (float) current_step_count / num_steps);
-            vec4 eye_temp_pos = add_v4(current_pos.eye, eye_delta);
+            // vec4 eye_move_vector = sub_v4(target_pos.eye, current_pos.eye);
+            // vec4 eye_delta = mult_v4(eye_move_vector, (float) current_step_count / num_steps);
+            // vec4 eye_temp_pos = add_v4(current_pos.eye, eye_delta);
 
-            vec4 at_move_vector = sub_v4(target_pos.at, current_pos.at);
-            vec4 at_delta = mult_v4(at_move_vector, (float) current_step_count / num_steps);
-            vec4 at_temp_pos = add_v4(current_pos.at, at_delta);
+            // vec4 at_move_vector = sub_v4(target_pos.at, current_pos.at);
+            // vec4 at_delta = mult_v4(at_move_vector, (float) current_step_count / num_steps);
+            // vec4 at_temp_pos = add_v4(current_pos.at, at_delta);
 
-            vec4 up_move_vector = sub_v4(target_pos.up, current_pos.up);
-            vec4 up_delta = mult_v4(up_move_vector, (float) current_step_count / num_steps);
-            vec4 up_temp_pos = add_v4(current_pos.up, up_delta);
+            // vec4 up_move_vector = sub_v4(target_pos.up, current_pos.up);
+            // vec4 up_delta = mult_v4(up_move_vector, (float) current_step_count / num_steps);
+            // vec4 up_temp_pos = add_v4(current_pos.up, up_delta);
 
-            model_view = look_at(eye_temp_pos.x, eye_temp_pos.y, eye_temp_pos.z, 
-                                 at_temp_pos.x, at_temp_pos.y, at_temp_pos.z, 
-                                 up_temp_pos.x, up_temp_pos.y, up_temp_pos.z);
+            // model_view = look_at(eye_temp_pos.x, eye_temp_pos.y, eye_temp_pos.z, 
+            //                      at_temp_pos.x, at_temp_pos.y, at_temp_pos.z, 
+            //                      up_temp_pos.x, up_temp_pos.y, up_temp_pos.z);
 
             current_step_count++;
         }
