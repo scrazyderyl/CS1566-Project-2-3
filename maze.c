@@ -984,10 +984,16 @@ void free_path() {
     }
 }
 
-void navigate() {
+void navigate(void (*path_gen_func)()) {
+    if (rotation_enabled) {
+        return;
+    }
+
+    free_path();
+    path_gen_func();
+    print_list();
     current_step = path;
     do_maze_step();
-    start_animation();
 }
 
 void go_to_entrance()
@@ -1037,15 +1043,7 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 set_side_view();
                 break;
             case 'p':
-                if (rotation_enabled) {
-                    return;
-                }
-
-                free_path();
-                dfs();
-                //printf("(%d,%d), ", list->next->x, list->next->y);
-                print_list();
-                navigate();
+                navigate(dfs);
                 break;
         }
 
