@@ -699,6 +699,52 @@ void dfs() {
     int found = dfs_recursive(start, 0, 0, 3);
 }
 
+int dfs_anyposition_recursive(Cell loc, int loc_x, int loc_y, int dir, Coordinate *curr) {
+    struct Coordinate *nextCoor = (struct Coordinate *) malloc(sizeof(Coordinate));
+    nextCoor->x = loc_x;
+    nextCoor->y = loc_y;
+    curr->next = nextCoor;
+    //printf(" t(%d,%d)\n", curr->x, curr->y);
+    // current = curr;
+    if(loc_x == width-1 && loc_y == height-1) {
+        printf("Found exit\n");
+        curr->next->
+        return 1;
+    }
+
+    int found = 0;
+    if(loc_y > 0 && loc.top == 0 && dir != 2) {
+        printf("Move top\n");
+        found = dfs_anyposition_recursive(maze[loc_x][loc_y-1], loc_x, loc_y-1, 0, curr->next);
+        //printf(" (%d,%d)\n", current->x, current->y);
+    }
+    if(found != 1 && loc_y < height-1 && loc.bottom == 0 && dir != 0) {
+        printf("Move bottom\n");
+        found = dfs_anyposition_recursive(maze[loc_x][loc_y+1], loc_x, loc_y+1, 2, curr->next);
+        //printf(" (%d,%d)\n", current->x, current->y);
+    }
+    if(found != 1 && loc_x > 0 && loc.left == 0 && dir != 3) {
+        printf("Move left\n");
+        found = dfs_anyposition_recursive(maze[loc_x-1][loc_y], loc_x-1, loc_y, 1, curr->next);
+        //printf("(%d,%d)\n", current->x, current->y);
+    }
+    if(found != 1 && loc_x < width-1 && loc.right == 0 && dir != 1) {
+        printf("Move right\n");
+        found = dfs_anyposition_recursive(maze[loc_x+1][loc_y], loc_x+1, loc_y, 3, curr->next);
+        //printf("(%d,%d)\n", curr->x, curr->y);
+    }
+    return found;
+}
+
+void dfs_anyposition() {
+    Cell start = maze[maze_x][maze_y];
+    list = (struct Coordinate *) malloc(sizeof(Coordinate));
+    list->x = maze_x;
+    list->y = maze_y;
+    int found = dfs_anyposition_recursive(start, maze_x, maze_y, -1, list);
+    list = list->next;
+}
+
 void print_list() {
     //printf("Entering print");
     current_step = path;
@@ -1044,6 +1090,9 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 break;
             case 'p':
                 navigate(dfs);
+                break;
+            case 'i':
+                navigate(dfs_anyposition);
                 break;
         }
 
