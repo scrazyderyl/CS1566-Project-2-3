@@ -1091,6 +1091,9 @@ void keyboard(unsigned char key, int mousex, int mousey)
             case 'p':
                 navigate(dfs);
                 break;
+            case 'i':
+                navigate(dfs_anyposition);
+                break;
         }
 
         glutPostRedisplay();
