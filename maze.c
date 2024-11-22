@@ -706,9 +706,9 @@ int dfs_anyposition_recursive(Cell loc, int loc_x, int loc_y, int dir, Coordinat
     curr->next = nextCoor;
     //printf(" t(%d,%d)\n", curr->x, curr->y);
     // current = curr;
-    if(loc_x == width-1 && loc_y == height-1) {
+    if(loc_x == maze_width-1 && loc_y == maze_height-1) {
         printf("Found exit\n");
-        curr->next->
+        curr->next->next = NULL;
         return 1;
     }
 
@@ -718,7 +718,7 @@ int dfs_anyposition_recursive(Cell loc, int loc_x, int loc_y, int dir, Coordinat
         found = dfs_anyposition_recursive(maze[loc_x][loc_y-1], loc_x, loc_y-1, 0, curr->next);
         //printf(" (%d,%d)\n", current->x, current->y);
     }
-    if(found != 1 && loc_y < height-1 && loc.bottom == 0 && dir != 0) {
+    if(found != 1 && loc_y < maze_height-1 && loc.bottom == 0 && dir != 0) {
         printf("Move bottom\n");
         found = dfs_anyposition_recursive(maze[loc_x][loc_y+1], loc_x, loc_y+1, 2, curr->next);
         //printf(" (%d,%d)\n", current->x, current->y);
@@ -728,7 +728,7 @@ int dfs_anyposition_recursive(Cell loc, int loc_x, int loc_y, int dir, Coordinat
         found = dfs_anyposition_recursive(maze[loc_x-1][loc_y], loc_x-1, loc_y, 1, curr->next);
         //printf("(%d,%d)\n", current->x, current->y);
     }
-    if(found != 1 && loc_x < width-1 && loc.right == 0 && dir != 1) {
+    if(found != 1 && loc_x < maze_width-1 && loc.right == 0 && dir != 1) {
         printf("Move right\n");
         found = dfs_anyposition_recursive(maze[loc_x+1][loc_y], loc_x+1, loc_y, 3, curr->next);
         //printf("(%d,%d)\n", curr->x, curr->y);
@@ -738,11 +738,11 @@ int dfs_anyposition_recursive(Cell loc, int loc_x, int loc_y, int dir, Coordinat
 
 void dfs_anyposition() {
     Cell start = maze[maze_x][maze_y];
-    list = (struct Coordinate *) malloc(sizeof(Coordinate));
-    list->x = maze_x;
-    list->y = maze_y;
-    int found = dfs_anyposition_recursive(start, maze_x, maze_y, -1, list);
-    list = list->next;
+    path = (struct Coordinate *) malloc(sizeof(Coordinate));
+    path->x = maze_x;
+    path->y = maze_y;
+    int found = dfs_anyposition_recursive(start, maze_x, maze_y, -1, path);
+    path = path->next;
 }
 
 void print_list() {
