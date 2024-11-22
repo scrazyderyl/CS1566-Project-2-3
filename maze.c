@@ -45,6 +45,10 @@ typedef struct Coordinate {
     struct Coordinate *next;
 } Coordinate;
 
+typedef struct {
+    vec4 eye, at, up;
+} view_position;
+
 vec2 TEXTURE_GRASS_TOP = { 0, 0 };
 vec2 TEXTURE_STONE_BRICKS = { 0, 1 };
 vec2 TEXTURE_POLISHED_GRANITE = { 0, 2 };
@@ -88,18 +92,23 @@ int maze_width;
 int maze_height;
 int left, right, bottom, top, near, far; // Island bounds
 
+// Player location in maze
 int maze_x;
 int maze_y;
 int player_facing; // 0: Pos x, 1: Pos y, 2: Neg x, 3: Neg y 
 
+// Automatic maze navigation
 struct Coordinate *path;
 struct Coordinate *current_step;
 
+// OpenGL buffers
 size_t num_vertices;
 size_t vertex_index = 0;
 vec4 *positions;
+vec4 *normals;
 vec2 *tex_coords;
 
+// Transform matrices
 GLuint current_transformation_matrix;
 mat4 ctm = IDENTITY_M4;
 
@@ -108,6 +117,9 @@ mat4 model_view = IDENTITY_M4;
 
 GLuint projection_location;
 mat4 projection = IDENTITY_M4;
+
+// Lighting
+vec4 light_position = { 0, 0, 0, 0 };
 
 // Rotation variable so mouse and motion can interact
 vec4 click_vector;
@@ -119,10 +131,6 @@ int is_first_rotation = 1;
 int is_animating = 0;
 int current_step_count = 0; 
 int num_steps = 100; // Fragment animation into this number of steps
-
-typedef struct {
-    vec4 eye, at, up;
-} view_position;
 
 view_position current_pos, target_pos;
 
@@ -235,6 +243,56 @@ void set_cube_vertices(int index, float x1, float y1, float z1, float size) {
     positions[index + 35] = (vec4) { x1, y2, z1, 1.0 };
 }
 
+void set_cube_normals(int index) {
+    // X+
+    normals[index] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+    normals[index + 1] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+    normals[index + 2] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+    normals[index + 3] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+    normals[index + 4] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+    normals[index + 5] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+
+    // X-
+    normals[index + 6] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+    normals[index + 7] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+    normals[index + 8] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+    normals[index + 9] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+    normals[index + 10] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+    normals[index + 11] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+
+    // Y+
+    normals[index + 12] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+    normals[index + 13] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+    normals[index + 14] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+    normals[index + 15] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+    normals[index + 16] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+    normals[index + 17] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+
+    // Y-
+    normals[index + 18] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+    normals[index + 19] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+    normals[index + 20] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+    normals[index + 21] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+    normals[index + 22] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+    normals[index + 23] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+
+    // Z+
+    normals[index + 24] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+    normals[index + 25] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+    normals[index + 26] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+    normals[index + 27] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+    normals[index + 28] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+    normals[index + 29] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+
+    // Z-
+    normals[index + 30] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+    normals[index + 31] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+    normals[index + 32] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+    normals[index + 33] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+    normals[index + 34] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+    normals[index + 35] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+}
+
 void set_cube_texture(int index, vec2 x_pos, vec2 x_neg, vec2 y_pos, vec2 y_neg, vec2 z_pos, vec2 z_neg) {
     // X+
     float x1 = TEX_SIZE * x_pos.x;
@@ -321,6 +379,7 @@ int try_probability(int numerator, int denominator) {
 
 void set_block(int x, int y, int z, Block block) {
     set_cube_vertices(vertex_index, x, y, z, 1);
+    set_cube_normals(vertex_index);
     set_cube_texture(vertex_index, block.x_pos, block.x_neg, block.y_pos, block.y_neg, block.z_pos, block.z_neg);
 
     vertex_index += 36;
@@ -438,7 +497,10 @@ void generate_world() {
 
     // Allocate arrays
     positions = (vec4 *) malloc(sizeof(vec4) * num_vertices);
+    normals = (vec4 *) malloc(sizeof(vec4) * num_vertices);
     tex_coords = (vec2 *) malloc(sizeof(vec2) * num_vertices);
+
+    light_position = (vec4) { (left + right) / 2.0, WALL_HEIGHT + 1, (bottom + top) / 2.0, 1.0 };
 
     // Generate bound blocks for testing purposes
     set_block(left, top, near, BLOCK_BRICKS);
@@ -825,9 +887,10 @@ void init(void)
     GLuint buffer;
     glGenBuffers(1, &buffer);
     glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices + sizeof(vec2) * num_vertices, NULL, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * 2 * num_vertices + sizeof(vec2) * num_vertices, NULL, GL_STATIC_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec4) * num_vertices, positions);
-    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, sizeof(vec2) * num_vertices, tex_coords);
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, sizeof(vec4) * num_vertices, normals);
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * 2 * num_vertices, sizeof(vec2) * num_vertices, tex_coords);
 
     // Initialize program
     GLuint program = initShader("vshader.glsl", "fshader.glsl");
@@ -837,9 +900,13 @@ void init(void)
     glEnableVertexAttribArray(vPosition);
     glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (0));
 
+    GLuint vNormal = glGetAttribLocation(program, "vNormal");
+    glEnableVertexAttribArray(vNormal);
+    glVertexAttribPointer(vNormal, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * num_vertices));
+    
     GLuint vTexCoord = glGetAttribLocation(program, "vTexCoord");
     glEnableVertexAttribArray(vTexCoord);
-    glVertexAttribPointer(vTexCoord, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * num_vertices));
+    glVertexAttribPointer(vTexCoord, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * 2 * num_vertices));
 
     current_transformation_matrix = glGetUniformLocation(program, "ctm");
     model_view_location = glGetUniformLocation(program, "model_view");
@@ -847,6 +914,9 @@ void init(void)
 
     GLuint texture_location = glGetUniformLocation(program, "texture");
     glUniform1i(texture_location, 0);
+
+    GLuint light_position_location = glGetUniformLocation(program, "light_position");
+    glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
 
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
