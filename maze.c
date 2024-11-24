@@ -120,7 +120,6 @@ mat4 projection = IDENTITY_M4;
 
 // Lighting
 vec4 light_position = { 1, 1, 0, 0 };
-vec4 zero_vector = { 0, 0, 0, 0 };
 int use_ambient;
 int use_diffuse;
 int use_specular;
@@ -132,9 +131,6 @@ GLuint light_enabled_location;
 GLuint use_ambient_location;
 GLuint use_diffuse_location;
 GLuint use_specular_location;
-GLuint ambient_location;
-GLuint diffuse_location;
-GLuint specular_location;
 
 
 // Rotation variable so mouse and motion can interact
@@ -951,15 +947,6 @@ void init(void)
     use_specular_location = glGetUniformLocation(program, "use_specular");
     glUniform1i(use_specular_location, use_specular);
 
-    ambient_location = glGetUniformLocation(program, "ambient");
-    glUniform4fv(ambient_location, 1, (GLvoid *) &zero_vector);
-
-    diffuse_location = glGetUniformLocation(program, "diffuse");
-    glUniform4fv(diffuse_location, 1, (GLvoid *) &zero_vector);
-
-    specular_location = glGetUniformLocation(program, "specular");
-    glUniform4fv(specular_location, 1, (GLvoid *) &zero_vector);
-
     GLuint light_position_location = glGetUniformLocation(program, "light_position");
     glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
 
@@ -1215,7 +1202,6 @@ void keyboard(unsigned char key, int mousex, int mousey)
                     glUniform1i(use_ambient_location, use_ambient);
                     if(use_ambient == 0) {
                         printf("Ambient Off\n");
-                        glUniform4fv(ambient_location, 1, (GLvoid *) &zero_vector);
                     }
                     glutPostRedisplay();
                 }
@@ -1226,7 +1212,6 @@ void keyboard(unsigned char key, int mousex, int mousey)
                     glUniform1i(use_diffuse_location, use_diffuse);
                     if(use_diffuse == 0) {
                         printf("Diffuse Off\n");
-                        glUniform4fv(diffuse_location, 1, (GLvoid *) &zero_vector);
                     }
                     glutPostRedisplay();
                 }
@@ -1237,7 +1222,6 @@ void keyboard(unsigned char key, int mousex, int mousey)
                     glUniform1i(use_specular_location, use_specular);
                     if(use_specular == 0) {
                         printf("Specular Off\n");
-                        glUniform4fv(specular_location, 1, (GLvoid *) &zero_vector);
                     }
                     glutPostRedisplay();
                 }
