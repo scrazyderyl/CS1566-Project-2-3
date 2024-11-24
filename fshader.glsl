@@ -21,14 +21,17 @@ void main()
 		vec4 H = normalize(LL + VV);
 		if(use_ambient == 1) 
 			ambient = 0.3 * the_color;
+		else
+			ambient = vec4(0, 0, 0, 0);
 		if(use_diffuse == 1) 
 			diffuse = max(dot(LL, NN), 0.0) * the_color;
-		if(use_specular == 1)
-			specular = pow(max(dot(NN, H), 0.0), 50) * vec4(1.0, 1.0, 1.0, 1.0);
-		if(use_ambient == 0 && use_diffuse == 0 && use_specular == 0)
-			gl_FragColor = the_color;
 		else
-			gl_FragColor = ambient + diffuse + specular;
+			diffuse = vec4(0, 0, 0, 0);
+		if(use_specular == 1)
+			specular = pow(max(dot(NN, H), 0.0), 200) * vec4(1.0, 1.0, 1.0, 1.0);
+		else
+			specular = vec4(0, 0, 0, 0);
+		gl_FragColor = ambient + diffuse + specular;
 	}
 	else
 		gl_FragColor = texture2D(texture, texCoord);
