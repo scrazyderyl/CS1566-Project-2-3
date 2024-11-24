@@ -1208,6 +1208,7 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 use_ambient ^= 0x1;
                 glUniform1i(use_ambient_location, use_ambient);
                 if(use_ambient == 0) {
+                    printf("Ambient Off\n");
                     glUniform4fv(ambient_location, 1, (GLvoid *) &zero_vector);
                 }
                 glutPostRedisplay();
@@ -1216,6 +1217,7 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 use_diffuse ^= 0x1;
                 glUniform1i(use_diffuse_location, use_diffuse);
                 if(use_diffuse == 0) {
+                    printf("Diffuse Off\n");
                     glUniform4fv(diffuse_location, 1, (GLvoid *) &zero_vector);
                 }
                 glutPostRedisplay();
@@ -1224,6 +1226,7 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 use_specular ^= 0x1;
                 glUniform1i(use_specular_location, use_specular);
                 if(use_specular == 0) {
+                    printf("Specular Off\n");
                     glUniform4fv(specular_location, 1, (GLvoid *) &zero_vector);
                 }
                 glutPostRedisplay();
