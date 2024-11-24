@@ -24,11 +24,13 @@
 #include <time.h>
 #include <unistd.h>
 #include <math.h>
+#include <sys/time.h>
 #include "initShader.h"
 #include "myLib.h"
 #include "maze_algorithms.h"
 
 #define IDENTITY_M4 {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0,0,1}}
+#define MICROSECONDS_PER_SECOND 1000000
 
 typedef struct {
     vec2 x_pos;
@@ -148,9 +150,10 @@ int rotation_enabled = 1;
 int is_first_rotation = 1;
 
 // Animation Variables
+#define ANIMATION_DURATION (0.5 * MICROSECONDS_PER_SECOND) // Microseconds
+
 int is_animating = 0;
-int current_step_count = 0; 
-int num_steps = 20; // Fragment animation into this number of steps
+long animation_started;
 int current_animation_type = 0; // 0 is a normal animation, 1 is the animation from side view to entrance
 
 view_position current_pos, target_pos;
@@ -396,6 +399,13 @@ void set_cube_texture(int index, vec2 x_pos, vec2 x_neg, vec2 y_pos, vec2 y_neg,
     tex_coords[index + 33] = (vec2) { x1, y1 };
     tex_coords[index + 34] = (vec2) { x1, y2 };
     tex_coords[index + 35] = (vec2) { x2, y1 };
+}
+
+long get_micro_time() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+
+    return tv.tv_sec * MICROSECONDS_PER_SECOND + tv.tv_usec;
 }
 
 int try_probability(int numerator, int denominator) {
@@ -1029,9 +1039,8 @@ void update_positions(vec4 position, int facing) {
 void start_animation(int type) {
     current_animation_type = type;
 
-    current_step_count = 0;
+    animation_started = get_micro_time();
     is_animating = 1;
-
 }
 
 void move_to(vec4 position) {
@@ -1361,55 +1370,61 @@ void motion(int x, int y) {
 
 void idle(void)
 {
-    if(is_animating)
+    if (!is_animating)
     {
-        // Are the start and end positions the same?
-        if(equal_v4(target_pos.eye, current_pos.eye) && equal_v4(target_pos.at, current_pos.at) && equal_v4(target_pos.up, current_pos.up))
-        {
-            is_animating = 0;
-            current_step_count = num_steps;
-        }
-        // Are we at the target yet?
-        else if(current_step_count == num_steps)
-        {
-            current_pos = target_pos;
-            model_view = look_at(target_pos.eye.x, target_pos.eye.y, target_pos.eye.z, 
-                                 target_pos.at.x, target_pos.at.y, target_pos.at.z, 
-                                 target_pos.up.x, target_pos.up.y, target_pos.up.z);
-
-
-            // If its go to entrance, turn
-            if(current_animation_type == 1)
-            {
-                //turn(get_right_direction(player_facing));
-            }
-
-            // Arrived at destination, no longer animating
-            is_animating = 0;
-            do_maze_step();
-        }
-        else
-        {
-            vec4 eye_move_vector = sub_v4(target_pos.eye, current_pos.eye);
-            vec4 eye_delta = mult_v4(eye_move_vector, (float) current_step_count / num_steps);
-            vec4 eye_temp_pos = add_v4(current_pos.eye, eye_delta);
-
-            vec4 at_move_vector = sub_v4(target_pos.at, current_pos.at);
-            vec4 at_delta = mult_v4(at_move_vector, (float) current_step_count / num_steps);
-            vec4 at_temp_pos = add_v4(current_pos.at, at_delta);
-
-            vec4 up_move_vector = sub_v4(target_pos.up, current_pos.up);
-            vec4 up_delta = mult_v4(up_move_vector, (float) current_step_count / num_steps);
-            vec4 up_temp_pos = add_v4(current_pos.up, up_delta);
-
-            model_view = look_at(eye_temp_pos.x, eye_temp_pos.y, eye_temp_pos.z, 
-                                 at_temp_pos.x, at_temp_pos.y, at_temp_pos.z, 
-                                 up_temp_pos.x, up_temp_pos.y, up_temp_pos.z);
-
-            current_step_count++;
-        }
-        glutPostRedisplay();
+        return;
     }
+
+    // Are the start and end positions the same?
+    if(equal_v4(target_pos.eye, current_pos.eye) && equal_v4(target_pos.at, current_pos.at) && equal_v4(target_pos.up, current_pos.up))
+    {
+        is_animating = 0;
+        return;
+    }
+
+    long elapsed = get_micro_time() - animation_started;
+    
+    // Are we at the target yet?
+    if (elapsed >= ANIMATION_DURATION)
+    {
+        current_pos = target_pos;
+        model_view = look_at(target_pos.eye.x, target_pos.eye.y, target_pos.eye.z, 
+                                target_pos.at.x, target_pos.at.y, target_pos.at.z, 
+                                target_pos.up.x, target_pos.up.y, target_pos.up.z);
+
+
+        // If its go to entrance, turn
+        if(current_animation_type == 1)
+        {
+            //turn(get_right_direction(player_facing));
+        }
+
+        // Arrived at destination, no longer animating
+        is_animating = 0;
+        do_maze_step();
+    }
+    else
+    {
+        float progress = (float)elapsed / ANIMATION_DURATION;
+        
+        vec4 eye_move_vector = sub_v4(target_pos.eye, current_pos.eye);
+        vec4 eye_delta = mult_v4(eye_move_vector, progress);
+        vec4 eye_temp_pos = add_v4(current_pos.eye, eye_delta);
+
+        vec4 at_move_vector = sub_v4(target_pos.at, current_pos.at);
+        vec4 at_delta = mult_v4(at_move_vector, progress);
+        vec4 at_temp_pos = add_v4(current_pos.at, at_delta);
+
+        vec4 up_move_vector = sub_v4(target_pos.up, current_pos.up);
+        vec4 up_delta = mult_v4(up_move_vector, progress);
+        vec4 up_temp_pos = add_v4(current_pos.up, up_delta);
+
+        model_view = look_at(eye_temp_pos.x, eye_temp_pos.y, eye_temp_pos.z, 
+                                at_temp_pos.x, at_temp_pos.y, at_temp_pos.z, 
+                                up_temp_pos.x, up_temp_pos.y, up_temp_pos.z);
+    }
+
+    glutPostRedisplay();
 }
 
 int main(int argc, char **argv)
