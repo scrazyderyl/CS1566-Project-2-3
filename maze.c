@@ -113,7 +113,8 @@ int is_first_rotation = 1;
 // Animation Variables
 int is_animating = 0;
 int current_step_count = 0; 
-int num_steps = 100; // Fragment animation into this number of steps
+int num_steps = 20; // Fragment animation into this number of steps
+int current_animation_type = 0; // 0 is a normal animation, 1 is the animation from side view to entrance
 
 typedef struct {
     vec4 eye, at, up;
@@ -148,17 +149,20 @@ void set_topdown_view() {
 // Sets the view to the default side view
 void set_side_view() {
 
-    model_view = look_at(0, 0, 100, // eye
-                         0, 0, -100, // at
+    model_view = look_at((float)(left + right) / 2, 0, 50, // eye
+                         (float)(left + right) / 2, 0, -50, // at
                          0, 1, 0); // up
 
     //model_view = matrixmult_mat4(ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10), model_view);
-    projection = frustum(left - 10, right - 10, bottom, top, -50, 50);
+    projection = frustum(left - 12, right - 12, bottom + 10, top - 10, far - 10, near - 10);
+    //projection = frustum(-1, 1, 0, 2, far - 10, near - 10);
+    //projection = frustum(far - 12, near - 12, bottom + 10, top - 10, left - 10, right - 10);
 
-     // Set the position of the viewer
-    vec4 cur_eye = (vec4) {0.0, 0.0, 100.0, 0.0};
-    vec4 cur_at = (vec4) {0.0, 0.0, -100.0, 0.0};
+    // Set the position of the viewer
+    vec4 cur_eye = (vec4) {(float)(left + right) / 2, 0, 50, 0.0};
+    vec4 cur_at = (vec4) {(float)(left + right) / 2, 0, -50, 0.0};
     vec4 cur_up = (vec4) {0.0, 1.0, 0.0, 0.0};
+
     current_pos = (view_position) {cur_eye, cur_at, cur_up};
 
     // Have the rotation remember that you're looking from the side now
@@ -554,8 +558,6 @@ void generate_world() {
 
     // Set actual number of vertices
     num_vertices = vertex_index;
-
-    ctm = translation(-(left + right / 2), -(top + bottom) / 2, -(near + far) / 2);
 }
 
 void prompt_maze_size() {
@@ -584,29 +586,182 @@ void prompt_maze_size() {
         exit(1);
     }
 }
+/*
+//0 is top
+//1 is left
+//2 is bottom
+//3 is right    
+int dfs_recursive(Cell loc, int loc_x, int loc_y, int dir) {
+    
+    struct Coordinate *nextCoor = (struct Coordinate *) malloc(sizeof(Coordinate));
+    nextCoor->x = loc_x;
+    nextCoor->y = loc_y;
+    if(loc_x == 0 && loc_y == 0) {
+        path = nextCoor;
+        current_step = path;
+    }
+    else {
+        current_step->next = nextCoor;
+        current_step = current_step->next;
+    }
+    printf(" t(%d,%d)\n", current_step->x, current_step->y);
+    // current = curr;
+    if(loc_x == maze_width-1 && loc_y == maze_height-1) {
+        current_step->next = NULL;
+        printf("Found exit");
+        return 1;
+    }
+    // if(dir == 0 && loc.left == 1 && loc.right == 1 && loc.bottom == 1) {
+    //     printf("Dead end 1");
+    //     return 0;
+    // }
+    // if(dir == 1 && loc.top == 1 && loc.right == 1 && loc.bottom == 1) {
+    //     printf("Dead end 2");
+    //     return 0;
+    // }
+    // if(dir == 2 && loc.left == 1 && loc.right == 1 && loc.top == 1) {
+    //     printf("Dead end 3");
+    //     return 0;
+    // }
+    // if(dir == 3 && loc.left == 1 && loc.top == 1 && loc.bottom == 1) {
+    //     printf("Dead end 4");
+    //     return 0;
+    // }
 
-void go_to_entrance()
-{
-    ctm = m4_identity();
+    int found = 0;
+    if(loc_y > 0 && loc.top == 0 && dir != 2) {
+        printf("Move top");
+        printf("(%d,%d)\n", current_step->x, current_step->y);
+        found = dfs_recursive(maze[loc_x][loc_y-1], loc_x, loc_y-1, 0);
+        printf(" (%d,%d)\n", current_step->x, current_step->y);
+    }
+    if(found != 1 && loc_y < maze_height-1 && loc.bottom == 0 && dir != 0) {
+        printf("Move bottom");
+        printf("x=%d, y=%d\n", loc_x, loc_y);
+        if(current_step->x != loc_x || current_step->y != loc_y) {
+            struct Coordinate *copy = (struct Coordinate *) malloc(sizeof(Coordinate));
+            copy->x = loc_x;
+            copy->y = loc_y;
+            current_step->next = copy;
+            current_step = current_step->next;
+            printf("(%d,%d)\n", current_step->x, current_step->y);
+        }
+        found = dfs_recursive(maze[loc_x][loc_y+1], loc_x, loc_y+1, 2);
+        printf(" (%d,%d)\n", current_step->x, current_step->y);
+    }
+    if(found != 1 && loc_x > 0 && loc.left == 0 && dir != 3) {
+        printf("Move left");
+        printf("x=%d, y=%d\n", loc_x, loc_y);
+        if(current_step->x != loc_x || current_step->y != loc_y) {
+            struct Coordinate *copy = (struct Coordinate *) malloc(sizeof(Coordinate));
+            copy->x = loc_x;
+            copy->y = loc_y;
+            current_step->next = copy;
+            current_step = current_step->next;
+            printf(" (%d,%d)\n", current_step->x, current_step->y);
+        }
+        found = dfs_recursive(maze[loc_x-1][loc_y], loc_x-1, loc_y, 1);
+        printf("(%d,%d)\n", current_step->x, current_step->y);
+    }
+    if(found != 1 && loc_x < maze_width-1 && loc.right == 0 && dir != 1) {
+        printf("Move right");
+        printf("x=%d, y=%d\n", loc_x, loc_y);
+        if(current_step->x != loc_x || current_step->y != loc_y) {
+            struct Coordinate *copy = (struct Coordinate *) malloc(sizeof(Coordinate));
+            copy->x = loc_x;
+            copy->y = loc_y;
+            current_step->next = copy;
+            current_step = current_step->next;
+            printf(" (%d,%d)\n", current_step->x, current_step->y);
+        }
+        found = dfs_recursive(maze[loc_x+1][loc_y], loc_x+1, loc_y, 3);
+        printf("(%d,%d)\n", current_step->x, current_step->y);
+    }
+    printf("x=%d, y=%d\n", loc_x, loc_y);
+    if(found != 1 && (current_step->x != loc_x || current_step->y != loc_y)) {
+        struct Coordinate *currCoor = (struct Coordinate *) malloc(sizeof(Coordinate));
+        currCoor->x = loc_x;
+        currCoor->y = loc_y;
+        current_step->next = currCoor;
+        current_step = current_step->next;
+        printf("c(%d,%d)\n", current_step->x, current_step->y);
+    }
 
-    // Set the positions to the entrance
-    x_pos = 0.5;
-    y_pos = 3.5;
-    z_pos = 2.5;
+    return found;
 
-    target_pos = (vec4) {x_pos, y_pos, z_pos, 0.0};
 
-    current_step_count = 0;
-    is_animating = 1;
 
-    // model_view = look_at(0, 2, 0, 1, 2, 0, 0, 1, 0);
-    model_view = look_at(x_pos, y_pos, z_pos, x_pos + 1, y_pos - 1, z_pos, 0, 1, 0);
-
-    projection = frustum(-1, 1, 0, 2, -1, -150);
-
-    // Disable rotation since we don't need it
-    rotation_enabled = 0;
 }
+
+void dfs() {
+    Cell start = maze[0][0];
+    int found = dfs_recursive(start, 0, 0, 3);
+}
+
+int dfs_anyposition_recursive(Cell loc, int loc_x, int loc_y, int dir, Coordinate *curr) {
+    struct Coordinate *nextCoor = (struct Coordinate *) malloc(sizeof(Coordinate));
+    nextCoor->x = loc_x;
+    nextCoor->y = loc_y;
+    curr->next = nextCoor;
+    //printf(" t(%d,%d)\n", curr->x, curr->y);
+    // current = curr;
+    if(loc_x == width-1 && loc_y == height-1) {
+        printf("Found exit\n");
+        curr->next->
+        return 1;
+    }
+
+    int found = 0;
+    if(loc_y > 0 && loc.top == 0 && dir != 2) {
+        printf("Move top\n");
+        found = dfs_anyposition_recursive(maze[loc_x][loc_y-1], loc_x, loc_y-1, 0, curr->next);
+        //printf(" (%d,%d)\n", current->x, current->y);
+    }
+    if(found != 1 && loc_y < height-1 && loc.bottom == 0 && dir != 0) {
+        printf("Move bottom\n");
+        found = dfs_anyposition_recursive(maze[loc_x][loc_y+1], loc_x, loc_y+1, 2, curr->next);
+        //printf(" (%d,%d)\n", current->x, current->y);
+    }
+    if(found != 1 && loc_x > 0 && loc.left == 0 && dir != 3) {
+        printf("Move left\n");
+        found = dfs_anyposition_recursive(maze[loc_x-1][loc_y], loc_x-1, loc_y, 1, curr->next);
+        //printf("(%d,%d)\n", current->x, current->y);
+    }
+    if(found != 1 && loc_x < width-1 && loc.right == 0 && dir != 1) {
+        printf("Move right\n");
+        found = dfs_anyposition_recursive(maze[loc_x+1][loc_y], loc_x+1, loc_y, 3, curr->next);
+        //printf("(%d,%d)\n", curr->x, curr->y);
+    }
+    return found;
+}
+
+void dfs_anyposition() {
+    Cell start = maze[maze_x][maze_y];
+    list = (struct Coordinate *) malloc(sizeof(Coordinate));
+    list->x = maze_x;
+    list->y = maze_y;
+    int found = dfs_anyposition_recursive(start, maze_x, maze_y, -1, list);
+    list = list->next;
+}
+
+void print_list() {
+    //printf("Entering print");
+    current_step = path;
+    //printf("(%d,%d), ", list->x, list->y);
+    while (current_step->x != maze_width-1 || current_step->y != maze_height-1) {
+        printf("(%d,%d), ", current_step->x, current_step->y);
+        current_step = current_step->next;
+    }
+    printf("(%d,%d) ", current_step->x, current_step->y);
+    printf("\n");
+}
+*/
+// Coordinate* coor_copy(Coordinate *original) {
+//     struct Coordinate *copy = (struct Coordinate *) malloc(sizeof(Coordinate));
+//     copy->x = original->x;
+//     copy->y = original->y;
+//     return copy;
+// }
 
 // Print out all keyboard keys that are used to the console
 void print_helper_text()
@@ -713,41 +868,47 @@ void display(void)
     glutSwapBuffers();
 }
 
-mat4 get_model_view(vec4 position, int facing) {
+void update_positions(vec4 position, int facing) {
     float x = position.x;
     float y = position.y;
     float z = position.z;
 
+    target_pos.eye = (vec4) {x, y, z, 0.0};
+    target_pos.up = (vec4) {0, 1, 0, 0.0};
+
+    // update target pos
     switch (facing) {
         case 0:
-            return look_at(x, y, z, x + 1, y - 1, z, 0, 1, 0);
+            //return look_at(x, y, z, x + 1, y - 1, z, 0, 1, 0);
+            target_pos.at = (vec4) {x + 1, y - 1, z, 0.0};
         case 1:
-            return look_at(x, y, z, x, y - 1, z + 1, 0, 1, 0);
+            //return look_at(x, y, z, x, y - 1, z + 1, 0, 1, 0);
+            target_pos.at = (vec4) {x, y - 1, z + 1, 0.0};
         case 2:
-            return look_at(x, y, z, x - 1, y - 1, z, 0, 1, 0);
+            //return look_at(x, y, z, x - 1, y - 1, z, 0, 1, 0);
+            target_pos.at = (vec4) {x - 1, y - 1, z, 0.0};
         case 3:
-            return look_at(x, y, z, x, y - 1, z - 1, 0, 1, 0);
+            //return look_at(x, y, z, x, y - 1, z - 1, 0, 1, 0);
+            target_pos.at = (vec4) {x, y - 1, z - 1, 0.0};
+            
     }
 }
 
-void start_animation() {
+void start_animation(int type) {
+    current_animation_type = type;
+
     current_step_count = 0;
     is_animating = 1;
+
 }
 
 void move_to(vec4 position) {
-    target_pos = position;
-    start_animation();
+    update_positions(position, player_facing);
 }
 
 void turn_to(int direction) {
-    if (rotation_enabled) {
-        return;
-    }
-
-    player_facing = direction;
-    model_view = get_model_view(current_pos, player_facing);
-    start_animation();
+    update_positions(current_pos.eye, direction);
+    start_animation(0);
 }
 
 void move_to_cell(int x, int y) {
@@ -811,16 +972,94 @@ void move_direction(int direction) {
             move_to_cell(maze_x, maze_y - 1);
             break;
     }
+
+    start_animation(0);
 }
 
+void turn(int direction) {
+    if (rotation_enabled) {
+        return;
+    }
+
+    player_facing = direction;
+    turn_to(direction);
+}
+/*
+void do_maze_step() {
+    if (current_step == NULL) {
+        return;
+    }
+    
+    // Turn to exit if at end
+    if (current_step->next == NULL) {
+        if (player_facing != 0) {
+            turn_to(0);
+            start_animation(0);
+        }
+
+        current_step = NULL;
+        return;
+    }
+
+    Coordinate *next = current_step->next;
+
+    // Calculate direction
+    int new_direction;
+    int dx = next->x - current_step->x;
+    int dy = next->y - current_step->y;
+
+    if (dx == 1) {
+        new_direction = 0;
+    } else if (dy == 1) {
+        new_direction = 1;
+    } else if (dx == -1) {
+        new_direction = 2;
+    } else if (dy == -1) {
+        new_direction = 3;
+    }
+    
+    // Turn if not facing
+    if (player_facing != new_direction) {
+        turn(new_direction);
+    } else {
+        // Move
+        move_to_cell(next->x, next->y);
+        current_step = next;
+    }
+
+    start_animation(0);
+}
+
+void free_path() {
+    current_step = path;
+
+    while (current_step != NULL) {
+        Coordinate *next = current_step->next;
+        free(current_step);
+        current_step = next;
+    }
+}
+
+void navigate(void (*path_gen_func)()) {
+    if (rotation_enabled) {
+        return;
+    }
+
+    free_path();
+    path_gen_func();
+    print_list();
+    current_step = path;
+    do_maze_step();
+}
+*/
 void go_to_entrance()
 {
     // Disable rotation since we don't need it
     rotation_enabled = 0;
+    projection = frustum(-1, 1, 0, 2, -0.5, -150);
 
-    model_view = get_model_view(current_pos, player_facing);
-    projection = frustum(-1, 1, 0, 2, -1, -150);
     move_to_cell(-1, 0);
+    start_animation(1);
 }
 
 void keyboard(unsigned char key, int mousex, int mousey)
@@ -859,6 +1098,12 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 break;
             case 'r':
                 set_side_view();
+                break;
+            case 'p':
+                //navigate(dfs);
+                break;
+            case 'i':
+                //navigate(dfs_anyposition);
                 break;
         }
 
@@ -950,6 +1195,12 @@ void idle(void)
             model_view = look_at(target_pos.eye.x, target_pos.eye.y, target_pos.eye.z, 
                                  target_pos.at.x, target_pos.at.y, target_pos.at.z, 
                                  target_pos.up.x, target_pos.up.y, target_pos.up.z);
+
+            // If its go to entrance, turn
+            if(current_animation_type == 1)
+            {
+                //turn(get_right_direction(player_facing));
+            }
 
             // Arrived at destination, no longer animating
             is_animating = 0;
