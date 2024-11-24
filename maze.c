@@ -142,7 +142,8 @@ int is_first_rotation = 1;
 // Animation Variables
 int is_animating = 0;
 int current_step_count = 0; 
-int num_steps = 100; // Fragment animation into this number of steps
+int num_steps = 50; // Fragment animation into this number of steps
+int current_animation_type = 0; // 0 is a normal animation, 1 is the animation from side view to entrance
 
 view_position current_pos, target_pos;
 
@@ -173,17 +174,20 @@ void set_topdown_view() {
 // Sets the view to the default side view
 void set_side_view() {
 
-    model_view = look_at((float)(left + right) / 2, 0, 100, // eye
-                         (float)(left + right) / 2, 0, -100, // at
+    model_view = look_at((float)(left + right) / 2, 0, 50, // eye
+                         (float)(left + right) / 2, 0, -50, // at
                          0, 1, 0); // up
 
     //model_view = matrixmult_mat4(ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10), model_view);
-    projection = frustum(left - 10, right - 10, bottom, top, -50, 50);
+    projection = frustum(left - 12, right - 12, bottom + 10, top - 10, far - 10, near - 10);
+    //projection = frustum(-1, 1, 0, 2, far - 10, near - 10);
+    //projection = frustum(far - 12, near - 12, bottom + 10, top - 10, left - 10, right - 10);
 
-     // Set the position of the viewer
-    vec4 cur_eye = (vec4) {0.0, 0.0, 100.0, 0.0};
-    vec4 cur_at = (vec4) {0.0, 0.0, -100.0, 0.0};
+    // Set the position of the viewer
+    vec4 cur_eye = (vec4) {(float)(left + right) / 2, 0, 50, 0.0};
+    vec4 cur_at = (vec4) {(float)(left + right) / 2, 0, -50, 0.0};
     vec4 cur_up = (vec4) {0.0, 1.0, 0.0, 0.0};
+
     current_pos = (view_position) {cur_eye, cur_at, cur_up};
 
     // Have the rotation remember that you're looking from the side now
@@ -971,35 +975,48 @@ void display(void)
     glutSwapBuffers();
 }
 
-mat4 get_model_view(vec4 position, int facing) {
+void update_positions(vec4 position, int facing) {
     float x = position.x;
     float y = position.y;
     float z = position.z;
 
+    target_pos.eye = (vec4) {x, y, z, 0.0};
+    target_pos.up = (vec4) {0, 1, 0, 0.0};
+
+    // update target pos
     switch (facing) {
         case 0:
-            return look_at(x, y, z, x + 1, y - 1, z, 0, 1, 0);
+            //return look_at(x, y, z, x + 1, y - 1, z, 0, 1, 0);
+            target_pos.at = (vec4) {x + 1, y - 1, z, 0.0};
         case 1:
-            return look_at(x, y, z, x, y - 1, z + 1, 0, 1, 0);
+            //return look_at(x, y, z, x, y - 1, z + 1, 0, 1, 0);
+            target_pos.at = (vec4) {x, y - 1, z + 1, 0.0};
         case 2:
-            return look_at(x, y, z, x - 1, y - 1, z, 0, 1, 0);
+            //return look_at(x, y, z, x - 1, y - 1, z, 0, 1, 0);
+            target_pos.at = (vec4) {x - 1, y - 1, z, 0.0};
         case 3:
-            return look_at(x, y, z, x, y - 1, z - 1, 0, 1, 0);
+            //return look_at(x, y, z, x, y - 1, z - 1, 0, 1, 0);
+            target_pos.at = (vec4) {x, y - 1, z - 1, 0.0};
+            
     }
 }
 
-void start_animation() {
+void start_animation(int type) {
+    current_animation_type = type;
+
     current_step_count = 0;
     is_animating = 1;
+
 }
 
 void move_to(vec4 position) {
-    current_pos.eye = position;
-    model_view = get_model_view(position, player_facing);
+    update_positions(position, player_facing);
+    start_animation(0);
 }
 
 void turn_to(int direction) {
-    model_view = get_model_view(current_pos.eye, direction);
+    update_positions(current_pos.eye, direction);
+    start_animation(0);
 }
 
 void move_to_cell(int x, int y) {
@@ -1063,8 +1080,6 @@ void move_direction(int direction) {
             move_to_cell(maze_x, maze_y - 1);
             break;
     }
-
-    start_animation();
 }
 
 void turn(int direction) {
@@ -1074,7 +1089,6 @@ void turn(int direction) {
 
     player_facing = direction;
     turn_to(direction);
-    start_animation();
 }
 
 void do_maze_step() {
@@ -1086,7 +1100,7 @@ void do_maze_step() {
     if (current_step->next == NULL) {
         if (player_facing != 0) {
             turn_to(0);
-            start_animation();
+            start_animation(0);
         }
 
         current_step = NULL;
@@ -1119,7 +1133,7 @@ void do_maze_step() {
         current_step = next;
     }
 
-    start_animation();
+    start_animation(0);
 }
 
 void free_path() {
@@ -1148,9 +1162,10 @@ void go_to_entrance()
 {
     // Disable rotation since we don't need it
     rotation_enabled = 0;
+    projection = frustum(-1, 1, 0, 2, -0.5, -150);
 
-    projection = frustum(-1, 1, 0, 2, -1, -150);
-    move_to_cell(0, 0);
+    move_to_cell(-1, 0);
+    start_animation(1);
 }
 
 void keyboard(unsigned char key, int mousex, int mousey)
@@ -1317,10 +1332,17 @@ void idle(void)
         // Are we at the target yet?
         else if(current_step_count == num_steps)
         {
-            // current_pos = target_pos;
-            // model_view = look_at(target_pos.eye.x, target_pos.eye.y, target_pos.eye.z, 
-            //                      target_pos.at.x, target_pos.at.y, target_pos.at.z, 
-            //                      target_pos.up.x, target_pos.up.y, target_pos.up.z);
+            current_pos = target_pos;
+            model_view = look_at(target_pos.eye.x, target_pos.eye.y, target_pos.eye.z, 
+                                 target_pos.at.x, target_pos.at.y, target_pos.at.z, 
+                                 target_pos.up.x, target_pos.up.y, target_pos.up.z);
+
+
+            // If its go to entrance, turn
+            if(current_animation_type == 1)
+            {
+                //turn(get_right_direction(player_facing));
+            }
 
             // Arrived at destination, no longer animating
             is_animating = 0;
@@ -1328,21 +1350,21 @@ void idle(void)
         }
         else
         {
-            // vec4 eye_move_vector = sub_v4(target_pos.eye, current_pos.eye);
-            // vec4 eye_delta = mult_v4(eye_move_vector, (float) current_step_count / num_steps);
-            // vec4 eye_temp_pos = add_v4(current_pos.eye, eye_delta);
+            vec4 eye_move_vector = sub_v4(target_pos.eye, current_pos.eye);
+            vec4 eye_delta = mult_v4(eye_move_vector, (float) current_step_count / num_steps);
+            vec4 eye_temp_pos = add_v4(current_pos.eye, eye_delta);
 
-            // vec4 at_move_vector = sub_v4(target_pos.at, current_pos.at);
-            // vec4 at_delta = mult_v4(at_move_vector, (float) current_step_count / num_steps);
-            // vec4 at_temp_pos = add_v4(current_pos.at, at_delta);
+            vec4 at_move_vector = sub_v4(target_pos.at, current_pos.at);
+            vec4 at_delta = mult_v4(at_move_vector, (float) current_step_count / num_steps);
+            vec4 at_temp_pos = add_v4(current_pos.at, at_delta);
 
-            // vec4 up_move_vector = sub_v4(target_pos.up, current_pos.up);
-            // vec4 up_delta = mult_v4(up_move_vector, (float) current_step_count / num_steps);
-            // vec4 up_temp_pos = add_v4(current_pos.up, up_delta);
+            vec4 up_move_vector = sub_v4(target_pos.up, current_pos.up);
+            vec4 up_delta = mult_v4(up_move_vector, (float) current_step_count / num_steps);
+            vec4 up_temp_pos = add_v4(current_pos.up, up_delta);
 
-            // model_view = look_at(eye_temp_pos.x, eye_temp_pos.y, eye_temp_pos.z, 
-            //                      at_temp_pos.x, at_temp_pos.y, at_temp_pos.z, 
-            //                      up_temp_pos.x, up_temp_pos.y, up_temp_pos.z);
+            model_view = look_at(eye_temp_pos.x, eye_temp_pos.y, eye_temp_pos.z, 
+                                 at_temp_pos.x, at_temp_pos.y, at_temp_pos.z, 
+                                 up_temp_pos.x, up_temp_pos.y, up_temp_pos.z);
 
             current_step_count++;
         }
