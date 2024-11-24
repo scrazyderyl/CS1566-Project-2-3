@@ -119,14 +119,16 @@ GLuint projection_location;
 mat4 projection = IDENTITY_M4;
 
 // Lighting
-vec4 light_position = { 0, 0, 0, 0 };
+vec4 light_position = { 1, 1, 0, 0 };
 vec4 zero_vector = { 0, 0, 0, 0 };
 int use_ambient;
 int use_diffuse;
 int use_specular;
+int lighting_enabled;
 vec4 diffuse;
 vec4 specular;
 
+GLuint light_enabled_location;
 GLuint use_ambient_location;
 GLuint use_diffuse_location;
 GLuint use_specular_location;
@@ -937,6 +939,9 @@ void init(void)
     GLuint texture_location = glGetUniformLocation(program, "texture");
     glUniform1i(texture_location, 0);
 
+    light_enabled_location = glGetUniformLocation(program, "lighting_enabled");
+    glUniform1i(light_enabled_location, lighting_enabled);
+
     use_ambient_location = glGetUniformLocation(program, "use_ambient");
     glUniform1i(use_ambient_location, use_ambient);
 
@@ -1205,30 +1210,41 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 navigate(dfs_anyposition);
                 break;
             case 'b':
-                use_ambient ^= 0x1;
-                glUniform1i(use_ambient_location, use_ambient);
-                if(use_ambient == 0) {
-                    printf("Ambient Off\n");
-                    glUniform4fv(ambient_location, 1, (GLvoid *) &zero_vector);
+                if(lighting_enabled == 1) {
+                    use_ambient ^= 0x1;
+                    glUniform1i(use_ambient_location, use_ambient);
+                    if(use_ambient == 0) {
+                        printf("Ambient Off\n");
+                        glUniform4fv(ambient_location, 1, (GLvoid *) &zero_vector);
+                    }
+                    glutPostRedisplay();
                 }
-                glutPostRedisplay();
                 break;
             case 'n':
-                use_diffuse ^= 0x1;
-                glUniform1i(use_diffuse_location, use_diffuse);
-                if(use_diffuse == 0) {
-                    printf("Diffuse Off\n");
-                    glUniform4fv(diffuse_location, 1, (GLvoid *) &zero_vector);
+                if(lighting_enabled == 1) {
+                    use_diffuse ^= 0x1;
+                    glUniform1i(use_diffuse_location, use_diffuse);
+                    if(use_diffuse == 0) {
+                        printf("Diffuse Off\n");
+                        glUniform4fv(diffuse_location, 1, (GLvoid *) &zero_vector);
+                    }
+                    glutPostRedisplay();
                 }
-                glutPostRedisplay();
                 break;
             case 'm':
-                use_specular ^= 0x1;
-                glUniform1i(use_specular_location, use_specular);
-                if(use_specular == 0) {
-                    printf("Specular Off\n");
-                    glUniform4fv(specular_location, 1, (GLvoid *) &zero_vector);
+                if(lighting_enabled == 1) {
+                    use_specular ^= 0x1;
+                    glUniform1i(use_specular_location, use_specular);
+                    if(use_specular == 0) {
+                        printf("Specular Off\n");
+                        glUniform4fv(specular_location, 1, (GLvoid *) &zero_vector);
+                    }
+                    glutPostRedisplay();
                 }
+                break;
+            case 'v':
+                lighting_enabled ^= 0x1;
+                glUniform1i(light_enabled_location, lighting_enabled);
                 glutPostRedisplay();
                 break;
         }
