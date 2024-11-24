@@ -22,10 +22,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <unistd.h>
 #include <math.h>
 #include "initShader.h"
 #include "myLib.h"
 #include "maze_algorithms.h"
+
+#define IDENTITY_M4 {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0,0,1}}
 
 typedef struct {
     vec2 x_pos;
@@ -35,6 +38,16 @@ typedef struct {
     vec2 z_pos;
     vec2 z_neg;
 } Block;
+
+typedef struct Coordinate {
+    int x;
+    int y;
+    struct Coordinate *next;
+} Coordinate;
+
+typedef struct {
+    vec4 eye, at, up;
+} view_position;
 
 vec2 TEXTURE_GRASS_TOP = { 0, 0 };
 vec2 TEXTURE_STONE_BRICKS = { 0, 1 };
@@ -63,12 +76,6 @@ Block BLOCK_STONE_BRICKS;
 #define get_right_direction(direction) (direction == 3 ? 0 : direction + 1)
 #define get_behind_direction(direction) (direction < 2 ? direction + 2 : direction - 2)
 
-typedef struct Coordinates_ {
-    int x;
-    int y;
-    struct Coordinates_ *next;
-} Coordinates;
-
 // Generation parameters
 #define ISLAND_PADDING 6
 #define CELL_SIZE 3
@@ -85,24 +92,46 @@ int maze_width;
 int maze_height;
 int left, right, bottom, top, near, far; // Island bounds
 
+// Player location in maze
 int maze_x;
 int maze_y;
 int player_facing; // 0: Pos x, 1: Pos y, 2: Neg x, 3: Neg y 
- 
-// OpenGL
+
+// Automatic maze navigation
+struct Coordinate *path;
+struct Coordinate *current_step;
+
+// OpenGL buffers
 size_t num_vertices;
 size_t vertex_index = 0;
 vec4 *positions;
+vec4 *normals;
 vec2 *tex_coords;
 
+// Transform matrices
 GLuint current_transformation_matrix;
-mat4 ctm = {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0,0,1}};
+mat4 ctm = IDENTITY_M4;
 
 GLuint model_view_location;
-mat4 model_view = {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0,0,1}};
+mat4 model_view = IDENTITY_M4;
 
 GLuint projection_location;
-mat4 projection = {{1,0,0,0}, {0,1,0,0}, {0,0,1,0}, {0,0,0,1}};
+mat4 projection = IDENTITY_M4;
+
+// Lighting
+vec4 light_position = { 1, 1, 0, 0 };
+int use_ambient;
+int use_diffuse;
+int use_specular;
+int lighting_enabled;
+vec4 diffuse;
+vec4 specular;
+
+GLuint light_enabled_location;
+GLuint use_ambient_location;
+GLuint use_diffuse_location;
+GLuint use_specular_location;
+
 
 // Rotation variable so mouse and motion can interact
 vec4 click_vector;
@@ -234,6 +263,56 @@ void set_cube_vertices(int index, float x1, float y1, float z1, float size) {
     positions[index + 35] = (vec4) { x1, y2, z1, 1.0 };
 }
 
+void set_cube_normals(int index) {
+    // X+
+    normals[index] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+    normals[index + 1] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+    normals[index + 2] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+    normals[index + 3] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+    normals[index + 4] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+    normals[index + 5] = (vec4) { 1.0, 0.0, 0.0, 1.0 };
+
+    // X-
+    normals[index + 6] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+    normals[index + 7] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+    normals[index + 8] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+    normals[index + 9] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+    normals[index + 10] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+    normals[index + 11] = (vec4) { -1.0, 0.0, 0.0, 1.0 };
+
+    // Y+
+    normals[index + 12] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+    normals[index + 13] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+    normals[index + 14] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+    normals[index + 15] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+    normals[index + 16] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+    normals[index + 17] = (vec4) { 0.0, 1.0, 0.0, 1.0 };
+
+    // Y-
+    normals[index + 18] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+    normals[index + 19] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+    normals[index + 20] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+    normals[index + 21] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+    normals[index + 22] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+    normals[index + 23] = (vec4) { 0.0, -1.0, 0.0, 1.0 };
+
+    // Z+
+    normals[index + 24] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+    normals[index + 25] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+    normals[index + 26] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+    normals[index + 27] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+    normals[index + 28] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+    normals[index + 29] = (vec4) { 0.0, 0.0, 1.0, 1.0 };
+
+    // Z-
+    normals[index + 30] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+    normals[index + 31] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+    normals[index + 32] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+    normals[index + 33] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+    normals[index + 34] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+    normals[index + 35] = (vec4) { 0.0, 0.0, -1.0, 1.0 };
+}
+
 void set_cube_texture(int index, vec2 x_pos, vec2 x_neg, vec2 y_pos, vec2 y_neg, vec2 z_pos, vec2 z_neg) {
     // X+
     float x1 = TEX_SIZE * x_pos.x;
@@ -320,6 +399,7 @@ int try_probability(int numerator, int denominator) {
 
 void set_block(int x, int y, int z, Block block) {
     set_cube_vertices(vertex_index, x, y, z, 1);
+    set_cube_normals(vertex_index);
     set_cube_texture(vertex_index, block.x_pos, block.x_neg, block.y_pos, block.y_neg, block.z_pos, block.z_neg);
 
     vertex_index += 36;
@@ -422,10 +502,10 @@ void generate_world() {
 
     // Store bounds
     left = -ISLAND_PADDING;
-    right = total_x_size - ISLAND_PADDING;
+    right = total_x_size - ISLAND_PADDING - 1;
     bottom = -total_y_size - 2;
     top = total_y_size + 2;
-    near = total_z_size - ISLAND_PADDING;
+    near = total_z_size - ISLAND_PADDING - 1;
     far = -ISLAND_PADDING;
 
     printf("X: %d, Y: %d Z: %d\n", total_x_size, total_y_size, total_z_size);
@@ -437,7 +517,10 @@ void generate_world() {
 
     // Allocate arrays
     positions = (vec4 *) malloc(sizeof(vec4) * num_vertices);
+    normals = (vec4 *) malloc(sizeof(vec4) * num_vertices);
     tex_coords = (vec2 *) malloc(sizeof(vec2) * num_vertices);
+
+    light_position = (vec4) { (left + right) / 2.0, WALL_HEIGHT + 1, (bottom + top) / 2.0, 1.0 };
 
     // Generate bound blocks for testing purposes
     set_block(left, top, near, BLOCK_BRICKS);
@@ -586,7 +669,7 @@ void prompt_maze_size() {
         exit(1);
     }
 }
-/*
+
 //0 is top
 //1 is left
 //2 is bottom
@@ -705,9 +788,9 @@ int dfs_anyposition_recursive(Cell loc, int loc_x, int loc_y, int dir, Coordinat
     curr->next = nextCoor;
     //printf(" t(%d,%d)\n", curr->x, curr->y);
     // current = curr;
-    if(loc_x == width-1 && loc_y == height-1) {
+    if(loc_x == maze_width-1 && loc_y == maze_height-1) {
         printf("Found exit\n");
-        curr->next->
+        curr->next->next = NULL;
         return 1;
     }
 
@@ -717,7 +800,7 @@ int dfs_anyposition_recursive(Cell loc, int loc_x, int loc_y, int dir, Coordinat
         found = dfs_anyposition_recursive(maze[loc_x][loc_y-1], loc_x, loc_y-1, 0, curr->next);
         //printf(" (%d,%d)\n", current->x, current->y);
     }
-    if(found != 1 && loc_y < height-1 && loc.bottom == 0 && dir != 0) {
+    if(found != 1 && loc_y < maze_height-1 && loc.bottom == 0 && dir != 0) {
         printf("Move bottom\n");
         found = dfs_anyposition_recursive(maze[loc_x][loc_y+1], loc_x, loc_y+1, 2, curr->next);
         //printf(" (%d,%d)\n", current->x, current->y);
@@ -727,7 +810,7 @@ int dfs_anyposition_recursive(Cell loc, int loc_x, int loc_y, int dir, Coordinat
         found = dfs_anyposition_recursive(maze[loc_x-1][loc_y], loc_x-1, loc_y, 1, curr->next);
         //printf("(%d,%d)\n", current->x, current->y);
     }
-    if(found != 1 && loc_x < width-1 && loc.right == 0 && dir != 1) {
+    if(found != 1 && loc_x < maze_width-1 && loc.right == 0 && dir != 1) {
         printf("Move right\n");
         found = dfs_anyposition_recursive(maze[loc_x+1][loc_y], loc_x+1, loc_y, 3, curr->next);
         //printf("(%d,%d)\n", curr->x, curr->y);
@@ -737,11 +820,11 @@ int dfs_anyposition_recursive(Cell loc, int loc_x, int loc_y, int dir, Coordinat
 
 void dfs_anyposition() {
     Cell start = maze[maze_x][maze_y];
-    list = (struct Coordinate *) malloc(sizeof(Coordinate));
-    list->x = maze_x;
-    list->y = maze_y;
-    int found = dfs_anyposition_recursive(start, maze_x, maze_y, -1, list);
-    list = list->next;
+    path = (struct Coordinate *) malloc(sizeof(Coordinate));
+    path->x = maze_x;
+    path->y = maze_y;
+    int found = dfs_anyposition_recursive(start, maze_x, maze_y, -1, path);
+    path = path->next;
 }
 
 void print_list() {
@@ -755,7 +838,7 @@ void print_list() {
     printf("(%d,%d) ", current_step->x, current_step->y);
     printf("\n");
 }
-*/
+
 // Coordinate* coor_copy(Coordinate *original) {
 //     struct Coordinate *copy = (struct Coordinate *) malloc(sizeof(Coordinate));
 //     copy->x = original->x;
@@ -778,10 +861,18 @@ void print_helper_text()
     printf("J - Rotate Left\n");
     printf("L - Rotate Right\n");
 
+    printf("P - Solve From Entrance\n");
+    printf("I - Solve From Anywhere\n");
+
     printf("\n---------[Camera]---------\n");
     printf("T - Topdown View\n");
     printf("R - Reset to Side View\n");
     printf("E - Go to Entrance\n");
+
+    printf("\n---------[Lighting]---------\n");
+    printf("B - Toggle Ambient\n");
+    printf("R - Toggle Diffuse\n");
+    printf("E - toggle Specular\n");
 
 
     printf("\n");
@@ -824,9 +915,10 @@ void init(void)
     GLuint buffer;
     glGenBuffers(1, &buffer);
     glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices + sizeof(vec2) * num_vertices, NULL, GL_STATIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * 2 * num_vertices + sizeof(vec2) * num_vertices, NULL, GL_STATIC_DRAW);
     glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec4) * num_vertices, positions);
-    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, sizeof(vec2) * num_vertices, tex_coords);
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, sizeof(vec4) * num_vertices, normals);
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * 2 * num_vertices, sizeof(vec2) * num_vertices, tex_coords);
 
     // Initialize program
     GLuint program = initShader("vshader.glsl", "fshader.glsl");
@@ -836,9 +928,13 @@ void init(void)
     glEnableVertexAttribArray(vPosition);
     glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (0));
 
+    GLuint vNormal = glGetAttribLocation(program, "vNormal");
+    glEnableVertexAttribArray(vNormal);
+    glVertexAttribPointer(vNormal, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * num_vertices));
+    
     GLuint vTexCoord = glGetAttribLocation(program, "vTexCoord");
     glEnableVertexAttribArray(vTexCoord);
-    glVertexAttribPointer(vTexCoord, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * num_vertices));
+    glVertexAttribPointer(vTexCoord, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * 2 * num_vertices));
 
     current_transformation_matrix = glGetUniformLocation(program, "ctm");
     model_view_location = glGetUniformLocation(program, "model_view");
@@ -846,6 +942,21 @@ void init(void)
 
     GLuint texture_location = glGetUniformLocation(program, "texture");
     glUniform1i(texture_location, 0);
+
+    light_enabled_location = glGetUniformLocation(program, "lighting_enabled");
+    glUniform1i(light_enabled_location, lighting_enabled);
+
+    use_ambient_location = glGetUniformLocation(program, "use_ambient");
+    glUniform1i(use_ambient_location, use_ambient);
+
+    use_diffuse_location = glGetUniformLocation(program, "use_diffuse");
+    glUniform1i(use_diffuse_location, use_diffuse);
+
+    use_specular_location = glGetUniformLocation(program, "use_specular");
+    glUniform1i(use_specular_location, use_specular);
+
+    GLuint light_position_location = glGetUniformLocation(program, "light_position");
+    glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
 
     glEnable(GL_CULL_FACE);
     glEnable(GL_DEPTH_TEST);
@@ -984,7 +1095,17 @@ void turn(int direction) {
     player_facing = direction;
     turn_to(direction);
 }
-/*
+
+void turn(int direction) {
+    if (rotation_enabled) {
+        return;
+    }
+
+    player_facing = direction;
+    turn_to(direction);
+    start_animation();
+}
+
 void do_maze_step() {
     if (current_step == NULL) {
         return;
@@ -994,7 +1115,7 @@ void do_maze_step() {
     if (current_step->next == NULL) {
         if (player_facing != 0) {
             turn_to(0);
-            start_animation(0);
+            start_animation();
         }
 
         current_step = NULL;
@@ -1027,7 +1148,7 @@ void do_maze_step() {
         current_step = next;
     }
 
-    start_animation(0);
+    start_animation();
 }
 
 void free_path() {
@@ -1051,7 +1172,7 @@ void navigate(void (*path_gen_func)()) {
     current_step = path;
     do_maze_step();
 }
-*/
+
 void go_to_entrance()
 {
     // Disable rotation since we don't need it
@@ -1084,10 +1205,10 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 move_direction(get_right_direction(player_facing));
                 break;
             case 'j':
-                turn_to(get_left_direction(player_facing));
+                turn(get_left_direction(player_facing));
                 break;
             case 'l':
-                turn_to(get_right_direction(player_facing));
+                turn(get_right_direction(player_facing));
                 break;
             case 't':
                 // Reset View
@@ -1100,10 +1221,45 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 set_side_view();
                 break;
             case 'p':
-                //navigate(dfs);
+                navigate(dfs);
                 break;
             case 'i':
-                //navigate(dfs_anyposition);
+                navigate(dfs_anyposition);
+                break;
+            case 'b':
+                if(lighting_enabled == 1) {
+                    use_ambient ^= 0x1;
+                    glUniform1i(use_ambient_location, use_ambient);
+                    if(use_ambient == 0) {
+                        printf("Ambient Off\n");
+                    }
+                    glutPostRedisplay();
+                }
+                break;
+            case 'n':
+                if(lighting_enabled == 1) {
+                    use_diffuse ^= 0x1;
+                    glUniform1i(use_diffuse_location, use_diffuse);
+                    if(use_diffuse == 0) {
+                        printf("Diffuse Off\n");
+                    }
+                    glutPostRedisplay();
+                }
+                break;
+            case 'm':
+                if(lighting_enabled == 1) {
+                    use_specular ^= 0x1;
+                    glUniform1i(use_specular_location, use_specular);
+                    if(use_specular == 0) {
+                        printf("Specular Off\n");
+                    }
+                    glutPostRedisplay();
+                }
+                break;
+            case 'v':
+                lighting_enabled ^= 0x1;
+                glUniform1i(light_enabled_location, lighting_enabled);
+                glutPostRedisplay();
                 break;
         }
 
@@ -1196,6 +1352,13 @@ void idle(void)
                                  target_pos.at.x, target_pos.at.y, target_pos.at.z, 
                                  target_pos.up.x, target_pos.up.y, target_pos.up.z);
 
+
+            // If its go to entrance, turn
+            if(current_animation_type == 1)
+            {
+                //turn(get_right_direction(player_facing));
+            }
+
             // If its go to entrance, turn
             if(current_animation_type == 1)
             {
@@ -1204,24 +1367,25 @@ void idle(void)
 
             // Arrived at destination, no longer animating
             is_animating = 0;
+            do_maze_step();
         }
         else
         {
-            vec4 eye_move_vector = sub_v4(target_pos.eye, current_pos.eye);
-            vec4 eye_delta = mult_v4(eye_move_vector, (float) current_step_count / num_steps);
-            vec4 eye_temp_pos = add_v4(current_pos.eye, eye_delta);
+            // vec4 eye_move_vector = sub_v4(target_pos.eye, current_pos.eye);
+            // vec4 eye_delta = mult_v4(eye_move_vector, (float) current_step_count / num_steps);
+            // vec4 eye_temp_pos = add_v4(current_pos.eye, eye_delta);
 
-            vec4 at_move_vector = sub_v4(target_pos.at, current_pos.at);
-            vec4 at_delta = mult_v4(at_move_vector, (float) current_step_count / num_steps);
-            vec4 at_temp_pos = add_v4(current_pos.at, at_delta);
+            // vec4 at_move_vector = sub_v4(target_pos.at, current_pos.at);
+            // vec4 at_delta = mult_v4(at_move_vector, (float) current_step_count / num_steps);
+            // vec4 at_temp_pos = add_v4(current_pos.at, at_delta);
 
-            vec4 up_move_vector = sub_v4(target_pos.up, current_pos.up);
-            vec4 up_delta = mult_v4(up_move_vector, (float) current_step_count / num_steps);
-            vec4 up_temp_pos = add_v4(current_pos.up, up_delta);
+            // vec4 up_move_vector = sub_v4(target_pos.up, current_pos.up);
+            // vec4 up_delta = mult_v4(up_move_vector, (float) current_step_count / num_steps);
+            // vec4 up_temp_pos = add_v4(current_pos.up, up_delta);
 
-            model_view = look_at(eye_temp_pos.x, eye_temp_pos.y, eye_temp_pos.z, 
-                                 at_temp_pos.x, at_temp_pos.y, at_temp_pos.z, 
-                                 up_temp_pos.x, up_temp_pos.y, up_temp_pos.z);
+            // model_view = look_at(eye_temp_pos.x, eye_temp_pos.y, eye_temp_pos.z, 
+            //                      at_temp_pos.x, at_temp_pos.y, at_temp_pos.z, 
+            //                      up_temp_pos.x, up_temp_pos.y, up_temp_pos.z);
 
             current_step_count++;
         }
