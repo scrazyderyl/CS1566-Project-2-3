@@ -120,6 +120,20 @@ mat4 projection = IDENTITY_M4;
 
 // Lighting
 vec4 light_position = { 0, 0, 0, 0 };
+vec4 zero_vector = { 0, 0, 0, 0 };
+int use_ambient;
+int use_diffuse;
+int use_specular;
+vec4 diffuse;
+vec4 specular;
+
+GLuint use_ambient_location;
+GLuint use_diffuse_location;
+GLuint use_specular_location;
+GLuint ambient_location;
+GLuint diffuse_location;
+GLuint specular_location;
+
 
 // Rotation variable so mouse and motion can interact
 vec4 click_vector;
@@ -841,10 +855,18 @@ void print_helper_text()
     printf("J - Rotate Left\n");
     printf("L - Rotate Right\n");
 
+    printf("P - Solve From Entrance\n");
+    printf("I - Solve From Anywhere\n");
+
     printf("\n---------[Camera]---------\n");
     printf("T - Topdown View\n");
     printf("R - Reset to Side View\n");
     printf("E - Go to Entrance\n");
+
+    printf("\n---------[Lighting]---------\n");
+    printf("B - Toggle Ambient\n");
+    printf("R - Toggle Diffuse\n");
+    printf("E - toggle Specular\n");
 
 
     printf("\n");
@@ -914,6 +936,24 @@ void init(void)
 
     GLuint texture_location = glGetUniformLocation(program, "texture");
     glUniform1i(texture_location, 0);
+
+    use_ambient_location = glGetUniformLocation(program, "use_ambient");
+    glUniform1i(use_ambient_location, use_ambient);
+
+    use_diffuse_location = glGetUniformLocation(program, "use_diffuse");
+    glUniform1i(use_diffuse_location, use_diffuse);
+
+    use_specular_location = glGetUniformLocation(program, "use_specular");
+    glUniform1i(use_specular_location, use_specular);
+
+    ambient_location = glGetUniformLocation(program, "ambient");
+    glUniform4fv(ambient_location, 1, (GLvoid *) &zero_vector);
+
+    diffuse_location = glGetUniformLocation(program, "diffuse");
+    glUniform4fv(diffuse_location, 1, (GLvoid *) &zero_vector);
+
+    specular_location = glGetUniformLocation(program, "specular");
+    glUniform4fv(specular_location, 1, (GLvoid *) &zero_vector);
 
     GLuint light_position_location = glGetUniformLocation(program, "light_position");
     glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
@@ -1163,6 +1203,30 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 break;
             case 'i':
                 navigate(dfs_anyposition);
+                break;
+            case 'b':
+                use_ambient ^= 0x1;
+                glUniform1i(use_ambient_location, use_ambient);
+                if(use_ambient == 0) {
+                    glUniform4fv(ambient_location, 1, (GLvoid *) &zero_vector);
+                }
+                glutPostRedisplay();
+                break;
+            case 'n':
+                use_diffuse ^= 0x1;
+                glUniform1i(use_diffuse_location, use_diffuse);
+                if(use_diffuse == 0) {
+                    glUniform4fv(diffuse_location, 1, (GLvoid *) &zero_vector);
+                }
+                glutPostRedisplay();
+                break;
+            case 'm':
+                use_specular ^= 0x1;
+                glUniform1i(use_specular_location, use_specular);
+                if(use_specular == 0) {
+                    glUniform4fv(specular_location, 1, (GLvoid *) &zero_vector);
+                }
+                glutPostRedisplay();
                 break;
         }
 
