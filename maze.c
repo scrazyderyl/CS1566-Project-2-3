@@ -605,23 +605,18 @@ void generate_world() {
     set_block((left + right) / 2, WALL_HEIGHT + 20, (bottom + top) / 2, BLOCK_BIRCH_PLANKS);
     light_position = (vec4) { (left + right) / 2, WALL_HEIGHT + 1, (bottom + top) / 2, 1.0 };
 
-    
+    // Decoy sun
+    set_block((left + right) / 2, WALL_HEIGHT + 20, (bottom + top) / 2, BLOCK_BIRCH_PLANKS);
 
     // Set actual number of vertices
     num_vertices = vertex_index;
-
-    printf("NMA: %d\n", num_vertices);
 }
 
 void prompt_maze_size() {
     // Ask for input and generate maze
     printf("Enter width and the height for the size of the maze (ex. 6 8)\n");
 
-    maze_width = 6;
-    maze_height = 6;
-
-    if (1)
-    //if(scanf("%d %d", &maze_width, &maze_height) > 0 && maze_width > 0 && maze_height > 0)
+    if(scanf("%d %d", &maze_width, &maze_height) > 0 && maze_width > 0 && maze_height > 0)
     {
         maze = malloc(maze_width * sizeof(Cell *));
 
@@ -839,11 +834,16 @@ void print_helper_text()
     printf("R - Reset to Side View\n");
     printf("E - Go to Entrance\n");
 
+    printf("'-' - Zoom Out\n");
+    printf("'+' - Zoom In\n");
+
     printf("\n---------[Lighting]---------\n");
     printf("V - Enable Light\n");
     printf("B - Toggle Ambient\n");
     printf("N - Toggle Diffuse\n");
     printf("M - toggle Specular\n");
+    printf("1 - Rotate Sun Counterclockwise\n");
+    printf("2 - Rotate Sun Clockwise\n");
 
 
     printf("\n");
@@ -1410,7 +1410,6 @@ void display(void)
 
     glUniformMatrix4fv(current_sun_matrix, 1, GL_FALSE, (GLfloat *) &sun_ctm);
     glDrawArrays(GL_TRIANGLES, num_vertices - 36, num_vertices);
-    printf("DISPLAY NM: %d\n", num_vertices);
 
     glutSwapBuffers();
 }
