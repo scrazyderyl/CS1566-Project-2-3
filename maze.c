@@ -999,7 +999,15 @@ void do_maze_step() {
     
     // Turn if not facing
     if (player_facing != new_direction) {
-        turn(new_direction);
+        int right = get_right_direction(player_facing);
+        
+        if (new_direction == right) {
+            turn(right);
+        } else {
+            int left = get_left_direction(player_facing);
+
+            turn(left);
+        }
     } else {
         // Move
         move_to_cell(next->x, next->y);
