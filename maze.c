@@ -137,6 +137,7 @@ int use_ambient;
 int use_diffuse;
 int use_specular;
 int lighting_enabled;
+int use_flashlight;
 vec4 diffuse;
 vec4 specular;
 
@@ -144,6 +145,8 @@ GLuint light_enabled_location;
 GLuint use_ambient_location;
 GLuint use_diffuse_location;
 GLuint use_specular_location;
+GLuint use_flashlight_location;
+GLuint light_position_location;
 
 
 // Rotation variable so mouse and motion can interact
@@ -999,7 +1002,15 @@ void do_maze_step() {
     
     // Turn if not facing
     if (player_facing != new_direction) {
-        turn(new_direction);
+        int right = get_right_direction(player_facing);
+        
+        if (new_direction == right) {
+            turn(right);
+        } else {
+            int left = get_left_direction(player_facing);
+
+            turn(left);
+        }
     } else {
         // Move
         move_to_cell(next->x, next->y);
@@ -1093,6 +1104,7 @@ void keyboard(unsigned char key, int mousex, int mousey)
         return;
     }
 
+
     switch(key) 
     {
         case 'q':
@@ -1157,6 +1169,29 @@ void keyboard(unsigned char key, int mousex, int mousey)
         case 'v':
             lighting_enabled ^= 0x1;
             glUniform1i(light_enabled_location, lighting_enabled);
+            if(lighting_enabled == 0) {
+                use_ambient = 0;
+                glUniform1i(use_ambient_location, use_ambient);
+                use_diffuse = 0;
+                glUniform1i(use_diffuse_location, use_diffuse_location);
+                use_specular = 0;
+                glUniform1i(use_specular_location, use_specular);
+            }
+            break;
+        case 'c':
+            if(lighting_enabled == 1) {
+                if(use_ambient == 0 && use_diffuse == 0 && use_specular == 0) {
+                    use_flashlight ^= 0x1;
+                    glUniform1i(use_flashlight_location, use_flashlight);
+                    if(use_flashlight == 0) {
+                        glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
+                    }
+                    else {
+                        glUniform4fv(light_position_location, 1, (GLvoid *) &target_pos.eye);
+                    }
+                    printf("Flashlight: %s\n", use_flashlight == 0 ? "OFF" : "ON");
+                }
+            }
             break;
         case '-':
             if(rotation_enabled)
@@ -1385,6 +1420,18 @@ void init(void)
 
     use_specular_location = glGetUniformLocation(program, "use_specular");
     glUniform1i(use_specular_location, use_specular);
+    
+    GLuint attenuation_constant_location = glGetUniformLocation(program, "attenuation_constant");
+    glUniform1f(attenuation_constant_location, 4.0);
+
+    GLuint attenuation_linear_location = glGetUniformLocation(program, "attenuation_linear");
+    glUniform1f(attenuation_linear_location, 3.0);
+
+    GLuint attenuation_quadratic_location = glGetUniformLocation(program, "attenuation_linear");
+    glUniform1f(attenuation_quadratic_location, 1.0);
+
+    use_flashlight_location = glGetUniformLocation(program, "use_flashlight");
+    glUniform1i(use_flashlight_location, use_flashlight);
 
     light_position_location = glGetUniformLocation(program, "light_position");
     glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
