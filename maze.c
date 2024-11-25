@@ -112,9 +112,6 @@ vec4 *positions;
 vec4 *normals;
 vec2 *tex_coords;
 
-vec4 *sun_positions;
-vec2 *sun_tex_coords;
-
 GLuint light_position_location;
 
 // Transform matrices
@@ -608,9 +605,11 @@ void generate_world() {
     generate_maze_wall(right_pos, bottom_pos, BLOCK_STONE_BRICKS);
 
     // Generate the sun
-    set_block((left + right) / 2, top, (bottom + top) / 2, BLOCK_BIRCH_PLANKS);
-
+    set_block((left + right) / 2, WALL_HEIGHT + 20, (bottom + top) / 2, BLOCK_BIRCH_PLANKS);
     light_position = (vec4) { (left + right) / 2, WALL_HEIGHT + 1, (bottom + top) / 2, 1.0 };
+
+    // Decoy sun
+    set_block((left + right) / 2, WALL_HEIGHT + 20, (bottom + top) / 2, BLOCK_BIRCH_PLANKS);
 
     // Set actual number of vertices
     num_vertices = vertex_index;
@@ -620,11 +619,7 @@ void prompt_maze_size() {
     // Ask for input and generate maze
     printf("Enter width and the height for the size of the maze (ex. 6 8)\n");
 
-    maze_width = 6;
-    maze_height = 6;
-
-    if (1)
-    //if(scanf("%d %d", &maze_width, &maze_height) > 0 && maze_width > 0 && maze_height > 0)
+    if(scanf("%d %d", &maze_width, &maze_height) > 0 && maze_width > 0 && maze_height > 0)
     {
         maze = malloc(maze_width * sizeof(Cell *));
 
@@ -842,11 +837,16 @@ void print_helper_text()
     printf("R - Reset to Side View\n");
     printf("E - Go to Entrance\n");
 
+    printf("'-' - Zoom Out\n");
+    printf("'+' - Zoom In\n");
+
     printf("\n---------[Lighting]---------\n");
     printf("V - Enable Light\n");
     printf("B - Toggle Ambient\n");
     printf("N - Toggle Diffuse\n");
     printf("M - toggle Specular\n");
+    printf("1 - Rotate Sun Counterclockwise\n");
+    printf("2 - Rotate Sun Clockwise\n");
 
 
     printf("\n");
@@ -1209,11 +1209,13 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 start_animation();
             }
             break;
-        case 'k':
-            // test_val += 50;
-            // printf("%d\n", test_val);
-            // sun_ctm = translation(test_val, 0, 0);
-
+        case '1':
+            sun_rotation += 45;
+            rotate_sun(45);
+            break;
+        case '2':
+            sun_rotation -= 45;
+            rotate_sun(-45);
             break;
         
     }
@@ -1267,9 +1269,9 @@ void motion(int x, int y) {
         vec4 drag_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
         drag_vector = normalize_v4(drag_vector);
 
-    // Take the cross product to get the rotate about vector
-    vec4 rotation_vector = crossprod_v4(click_vector, drag_vector);
-    rotation_vector = normalize_v4(rotation_vector);
+        // Take the cross product to get the rotate about vector
+        vec4 rotation_vector = crossprod_v4(click_vector, drag_vector);
+        rotation_vector = normalize_v4(rotation_vector);
 
         // If the subtraction results in a nan, don't rotate
         if(isnan(rotation_vector.x) || isnan(rotation_vector.y) ||  isnan(rotation_vector.z) || isnan(rotation_vector.w)) return;
@@ -1279,10 +1281,10 @@ void motion(int x, int y) {
         GLfloat az = rotation_vector.z;
         GLfloat d = sqrt(pow(ay, 2) + pow(az, 2));
 
-    if(is_first_rotation){
-        previous_rotation_matrix = ctm;
-        is_first_rotation = 0;
-    }
+        if(is_first_rotation){
+            previous_rotation_matrix = ctm;
+            is_first_rotation = 0;
+        }
 
         ctm = matrixmult_mat4(translation(-((left + right) / 2), -((bottom + top) / 2), -((near + far) / 2)), previous_rotation_matrix);
         ctm = matrixmult_mat4(rotate_arbitrary_x(ay, az, d), ctm);
@@ -1295,6 +1297,7 @@ void motion(int x, int y) {
         ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_x(ay, az, d)), ctm);
         ctm = matrixmult_mat4(translation(((left + right) / 2), ((bottom + top) / 2), ((near + far) / 2)), ctm);
 
+        sun_ctm = ctm;
         glutPostRedisplay();
     } else {
         // Flashlight
@@ -1417,18 +1420,6 @@ void init(void)
 
     use_specular_location = glGetUniformLocation(program, "use_specular");
     glUniform1i(use_specular_location, use_specular);
-    
-    GLuint attenuation_constant_location = glGetUniformLocation(program, "attenuation_constant");
-    glUniform1f(attenuation_constant_location, 4.0);
-
-    GLuint attenuation_linear_location = glGetUniformLocation(program, "attenuation_linear");
-    glUniform1f(attenuation_linear_location, 3.0);
-
-    GLuint attenuation_quadratic_location = glGetUniformLocation(program, "attenuation_linear");
-    glUniform1f(attenuation_quadratic_location, 1.0);
-
-    use_flashlight_location = glGetUniformLocation(program, "use_flashlight");
-    glUniform1i(use_flashlight_location, use_flashlight);
 
     GLuint light_position_location = glGetUniformLocation(program, "light_position");
     glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
@@ -1446,6 +1437,7 @@ void display(void)
     
     glUniformMatrix4fv(model_view_location, 1, GL_FALSE, (GLfloat *) &model_view);
     glUniformMatrix4fv(projection_location, 1, GL_FALSE, (GLfloat *) &projection);
+    glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
 
 
     glUniformMatrix4fv(current_transformation_matrix, 1, GL_FALSE, (GLfloat *) &ctm);
