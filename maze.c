@@ -1420,20 +1420,8 @@ void init(void)
 
     use_specular_location = glGetUniformLocation(program, "use_specular");
     glUniform1i(use_specular_location, use_specular);
-    
-    GLuint attenuation_constant_location = glGetUniformLocation(program, "attenuation_constant");
-    glUniform1f(attenuation_constant_location, 4.0);
 
-    GLuint attenuation_linear_location = glGetUniformLocation(program, "attenuation_linear");
-    glUniform1f(attenuation_linear_location, 3.0);
-
-    GLuint attenuation_quadratic_location = glGetUniformLocation(program, "attenuation_linear");
-    glUniform1f(attenuation_quadratic_location, 1.0);
-
-    use_flashlight_location = glGetUniformLocation(program, "use_flashlight");
-    glUniform1i(use_flashlight_location, use_flashlight);
-
-    light_position_location = glGetUniformLocation(program, "light_position");
+    GLuint light_position_location = glGetUniformLocation(program, "light_position");
     glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
 
     glEnable(GL_CULL_FACE);
