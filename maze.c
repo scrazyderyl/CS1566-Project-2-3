@@ -159,7 +159,6 @@ int is_animating = 0;
 long animation_started;
 vec4 eye_move_vector;
 vec4 at_move_vector;
-int current_animation_type = 0; // 0: Fixed rotation, 1: Fixed point
 
 view_position current_pos, target_pos;
 
@@ -168,20 +167,21 @@ void set_topdown_view() {
     float center_x = (float)(left + right) / 2;
     float center_z = (float)(near + far) / 2;
 
-    vec4 cur_eye = (vec4) {center_x, 1.5 * max_side, center_z, 1.0};
-    vec4 cur_at = (vec4) {center_x, 0, center_z, 1.0};
-    vec4 cur_up = (vec4) {0, 0, 1, 0};
+    vec4 new_eye = (vec4) {center_x, 1.5 * max_side, center_z, 1.0};
+    vec4 new_at = (vec4) {center_x, 0, center_z, 1.0};
+    vec4 new_up = (vec4) {0, 0, -1, 0};
 
     // Set the position of the viewer
-    current_pos = (view_position) {cur_eye, cur_at, cur_up};
-
-    model_view = look_at(cur_eye, cur_at, cur_up);
+    target_pos = (view_position) {new_eye, new_at, new_up};
+    ctm = m4_identity();
 
     // Have the rotation remember that you're looking from the top now
     previous_rotation_matrix = ctm;
 
     // Re-enable Rotation
     rotation_enabled = 1;
+
+    start_animation();
 }
 
 // Sets the view to the default side view
@@ -189,19 +189,21 @@ void set_side_view() {
     float center_x = (float)(left + right) / 2;
     
     // Set the position of the viewer
-    vec4 cur_eye = (vec4) {center_x, 0, 1.5 * max_side, 0.0};
-    vec4 cur_at = (vec4) {center_x, 0, 0, 0.0};
-    vec4 cur_up = (vec4) {0.0, 1.0, 0.0, 0.0};
+    vec4 new_eye = (vec4) {center_x, 0, 1.5 * max_side, 0.0};
+    vec4 new_at = (vec4) {center_x, 0, 0, 0.0};
+    vec4 new_up = (vec4) {0.0, 1.0, 0.0, 0.0};
 
-    current_pos = (view_position) {cur_eye, cur_at, cur_up};
-
-    model_view = look_at(cur_eye, cur_at, cur_up);
+    target_pos = (view_position) {new_eye, new_at, new_up};
+    ctm = m4_identity();
+    model_view = look_at(new_eye, new_at, new_up);
 
     // Have the rotation remember that you're looking from the side now
     previous_rotation_matrix = ctm;
 
     // Re-enable Rotation
     rotation_enabled = 1;
+
+    start_animation();
 }
 
 void define_blocks() {
@@ -1031,8 +1033,7 @@ void update_positions(vec4 position, int facing) {
     }
 }
 
-void start_animation(int type) {
-    current_animation_type = type;
+void start_animation() {
     animation_started = get_micro_time();
     eye_move_vector = sub_v4(target_pos.eye, current_pos.eye);
     at_move_vector = sub_v4(target_pos.at, current_pos.at);
