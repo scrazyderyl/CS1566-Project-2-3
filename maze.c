@@ -93,6 +93,7 @@ Cell **maze;
 int maze_width;
 int maze_height;
 int left, right, bottom, top, near, far; // Island bounds
+int max_side;
 
 // Player location in maze
 int maze_x;
@@ -116,6 +117,8 @@ vec2 *sun_tex_coords;
 GLuint light_position_location;
 
 // Transform matrices
+#define CLIP_NEAR 0.01
+
 GLuint current_transformation_matrix;
 mat4 ctm = IDENTITY_M4;
 
@@ -156,60 +159,10 @@ int is_first_rotation = 1;
 
 int is_animating = 0;
 long animation_started;
-int current_animation_type = 0; // 0 is a normal animation, 1 is the animation from side view to entrance
+vec4 eye_move_vector;
+vec4 at_move_vector;
 
 view_position current_pos, target_pos;
-
-// Sets the view to a towdown view of the maze
-void set_topdown_view() {
-    model_view = look_at(0, 0, 0, // eye
-                         0, -1, 0, // at
-                         0, 0, -1); // up
-
-    model_view = matrixmult_mat4(model_view, ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10)); // Scale to fit view
-
-    // Set the position of the viewer
-    vec4 cur_eye = (vec4) {0.0, 0.0, 0.0, 0.0};
-    vec4 cur_at = (vec4) {0.0, -1.0, 0.0, 0.0};
-    vec4 cur_up = (vec4) {0.0, 0.0, -1.0, 0.0};
-    current_pos = (view_position) {cur_eye, cur_at, cur_up};
-
-    // No need for projection here, reset it
-    projection = m4_identity();
-
-    // Have the rotation remember that you're looking from the top now
-    previous_rotation_matrix = ctm;
-
-    // Re-enable Rotation
-    rotation_enabled = 1;
-}
-
-// Sets the view to the default side view
-void set_side_view() {
-    ctm = m4_identity();
-
-    model_view = look_at((float)(left + right) / 2, 0, 50, // eye
-                         (float)(left + right) / 2, 0, -50, // at
-                         0, 1, 0); // up
-
-    //model_view = matrixmult_mat4(ortho(left - 10, right + 10, bottom - 10, top + 10, near + 10, far - 10), model_view);
-    projection = frustum(left - 12, right - 12, bottom + 10, top - 10, far - 10, near - 10);
-    //projection = frustum(-1, 1, 0, 2, far - 10, near - 10);
-    //projection = frustum(far - 12, near - 12, bottom + 10, top - 10, left - 10, right - 10);
-
-    // Set the position of the viewer
-    vec4 cur_eye = (vec4) {(float)(left + right) / 2, 0, 50, 0.0};
-    vec4 cur_at = (vec4) {(float)(left + right) / 2, 0, -50, 0.0};
-    vec4 cur_up = (vec4) {0.0, 1.0, 0.0, 0.0};
-
-    current_pos = (view_position) {cur_eye, cur_at, cur_up};
-
-    // Have the rotation remember that you're looking from the side now
-    previous_rotation_matrix = ctm;
-
-    // Re-enable Rotation
-    rotation_enabled = 1;
-}
 
 void define_blocks() {
     BLOCK_GRASS = (Block) { TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_TOP, TEXTURE_DIRT, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE };
@@ -504,6 +457,12 @@ void generate_world() {
     int island_height = (island_smaller_side + 1) / 2;
     int total_y_size = 1 + WALL_HEIGHT + island_height;
 
+    if (total_y_size > island_larger_side) {
+        max_side = total_y_size;
+    } else {
+        max_side = island_larger_side;
+    }
+
     size_t maze_floor_blocks = maze_x_size * maze_z_size;
     size_t maze_walls_blocks = ((maze_height + 1) * (maze_width + 1) + (maze_height * (maze_width + 1) + maze_width * (maze_height + 1) - maze_width * maze_height - 1) * CELL_SIZE) * WALL_HEIGHT;
     size_t island_blocks = total_x_size * total_z_size * (REMOVE_DIST + 1);
@@ -529,8 +488,6 @@ void generate_world() {
     printf("Left: %d Right: %d\n", left, right);
     printf("Bottom: %d Top: %d\n", bottom, top);
     printf("Near: %d Far: %d\n", near, far);
-
-    set_side_view();
 
     // Allocate arrays
     positions = (vec4 *) malloc(sizeof(vec4) * num_vertices);
@@ -886,6 +843,16 @@ void print_helper_text()
 
 void init(void)
 {
+    // Set starting location
+    float center_x = (float)(left + right) / 2;
+
+    vec4 new_eye = (vec4) {center_x, 0, 1.5 * max_side, 0.0};
+    vec4 new_at = (vec4) {center_x, 0, 0, 0.0};
+    vec4 new_up = (vec4) {0.0, 1.0, 0.0, 0.0};
+
+    current_pos = (view_position) {new_eye, new_at, new_up};
+    model_view = look_at(new_eye, new_at, new_up);
+
     // Load textures
     int tex_width = 64;
     int tex_height = 64;
@@ -944,8 +911,7 @@ void init(void)
     current_transformation_matrix = glGetUniformLocation(program, "ctm");
     model_view_location = glGetUniformLocation(program, "model_view");
     projection_location = glGetUniformLocation(program, "projection");
-
-    current_sun_matrix = glGetUniformLocation(program, "sun_ctm");
+    projection = frustum(-CLIP_NEAR, CLIP_NEAR, -CLIP_NEAR, CLIP_NEAR, -CLIP_NEAR, -100000);
 
     GLuint texture_location = glGetUniformLocation(program, "texture");
     glUniform1i(texture_location, 0);
@@ -996,45 +962,40 @@ void update_positions(vec4 position, int facing) {
     float z = position.z;
 
     target_pos.eye = (vec4) {x, y, z, 0.0};
-    target_pos.up = (vec4) {0, 1, 0, 0.0};
 
     // update target pos
     switch (facing) {
         case 0:
-            //return look_at(x, y, z, x + 1, y - 1, z, 0, 1, 0);
-            target_pos.at = (vec4) {x + 1, y - 1, z, 0.0};
+            target_pos.at = (vec4) {x + 1, y, z, 0.0};
             break;
         case 1:
-            //return look_at(x, y, z, x, y - 1, z + 1, 0, 1, 0);
-            target_pos.at = (vec4) {x, y - 1, z + 1, 0.0};
+            target_pos.at = (vec4) {x, y, z + 1, 0.0};
             break;
         case 2:
-            //return look_at(x, y, z, x - 1, y - 1, z, 0, 1, 0);
-            target_pos.at = (vec4) {x - 1, y - 1, z, 0.0};
+            target_pos.at = (vec4) {x - 1, y, z, 0.0};
             break;
         case 3:
-            //return look_at(x, y, z, x, y - 1, z - 1, 0, 1, 0);
-            target_pos.at = (vec4) {x, y - 1, z - 1, 0.0};
+            target_pos.at = (vec4) {x, y, z - 1, 0.0};
             break;
             
     }
 }
 
-void start_animation(int type) {
-    current_animation_type = type;
-
+void start_animation() {
     animation_started = get_micro_time();
+    eye_move_vector = sub_v4(target_pos.eye, current_pos.eye);
+    at_move_vector = sub_v4(target_pos.at, current_pos.at);
     is_animating = 1;
 }
 
 void move_to(vec4 position) {
     update_positions(position, player_facing);
-    start_animation(0);
+    start_animation();
 }
 
 void turn_to(int direction) {
     update_positions(current_pos.eye, direction);
-    start_animation(0);
+    start_animation();
 }
 
 void move_to_cell(int x, int y) {
@@ -1118,7 +1079,7 @@ void do_maze_step() {
     if (current_step->next == NULL) {
         if (player_facing != 0) {
             turn_to(0);
-            start_animation(0);
+            start_animation();
         }
 
         current_step = NULL;
@@ -1151,7 +1112,7 @@ void do_maze_step() {
         current_step = next;
     }
 
-    start_animation(0);
+    start_animation();
 }
 
 void free_path() {
@@ -1182,10 +1143,63 @@ void go_to_entrance()
     
     // Disable rotation since we don't need it
     rotation_enabled = 0;
-    projection = frustum(-1, 1, 0, 2, -0.5, -150);
+    target_pos.up = (vec4) {0, 1, 0, 0.0};
 
-    move_to_cell(-1, 0);
-    start_animation(1);
+    move_to_cell(0, 0);
+    start_animation();
+}
+
+// Sets the view to a towdown view of the maze
+void set_topdown_view() {
+    float center_x = (float)(left + right) / 2;
+    float center_z = (float)(near + far) / 2;
+
+    vec4 new_eye = (vec4) {center_x, 1.5 * max_side, center_z, 1.0};
+    vec4 new_at = (vec4) {center_x, 0, center_z, 1.0};
+    vec4 new_up = (vec4) {0, 0, -1, 0};
+
+    // Set the position of the viewer
+    target_pos = (view_position) {new_eye, new_at, new_up};
+    ctm = m4_identity();
+
+    // Have the rotation remember that you're looking from the top now
+    previous_rotation_matrix = ctm;
+
+    // Re-enable Rotation
+    rotation_enabled = 1;
+
+    start_animation();
+}
+
+// Sets the view to the default side view
+void set_side_view() {
+    float center_x = (float)(left + right) / 2;
+    
+    // Set the position of the viewer
+    vec4 new_eye = (vec4) {center_x, 0, 1.5 * max_side, 0.0};
+    vec4 new_at = (vec4) {center_x, 0, 0, 0.0};
+    vec4 new_up = (vec4) {0.0, 1.0, 0.0, 0.0};
+
+    target_pos = (view_position) {new_eye, new_at, new_up};
+    ctm = m4_identity();
+
+    // Have the rotation remember that you're looking from the side now
+    previous_rotation_matrix = ctm;
+
+    // Re-enable Rotation
+    rotation_enabled = 1;
+
+    start_animation();
+}
+
+void rotate_sun(int degrees)
+{
+    //sun_ctm = translation(-((left + right) / 2), 0, -((near + far) / 2));
+    sun_ctm = matrixmult_mat4(translation(-((left + right) / 2), 0, -((top + bottom) / 2)), sun_ctm);
+    sun_ctm = matrixmult_mat4(rotate_z(degrees), sun_ctm);
+    sun_ctm = matrixmult_mat4(translation(((left + right) / 2), 0, ((top + bottom) / 2)), sun_ctm);
+
+    light_position = vectormult_mat4(rotate_z(degrees), light_position);
 }
 
 void rotate_sun(int degrees)
@@ -1236,7 +1250,9 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 set_side_view();
                 break;
             case 'p':
-                navigate(dfs);
+                if (maze_x == 0 && maze_y == 0) {
+                    navigate(dfs);
+                }
                 break;
             case 'i':
                 navigate(dfs_anyposition);
@@ -1271,7 +1287,7 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 {
                     target_pos = current_pos;
                     target_pos.eye = add_v4(current_pos.eye, (vec4) {0, 0, 10, 0.0});
-                    start_animation(0);
+                    start_animation();
                 }
                 break;
             case '=':
@@ -1279,7 +1295,7 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 {
                     target_pos = current_pos;
                     target_pos.eye = sub_v4(current_pos.eye, (vec4) {0, 0, 10, 0.0});
-                    start_animation(0);
+                    start_animation();
                 }
                 break;
             case '1':
@@ -1316,53 +1332,50 @@ void mouse(int button, int state, int x, int y) {
 }
 
 void motion(int x, int y) {
-    if(rotation_enabled) 
+    if (!rotation_enabled) 
     {
-        float x_coordinate = (x * 2.0 / 1023.0) - 1;
-        float y_coordinate = -((y * 2.0 / 1023.0) - 1);
-        float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
+        return;
+    }
+    
+    float x_coordinate = (x * 2.0 / 1023.0) - 1;
+    float y_coordinate = -((y * 2.0 / 1023.0) - 1);
+    float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
 
-        // Disable rotation if z is nan
-        if(isnan(z_coordinate) == 1) return;
+    // Disable rotation if z is nan
+    if(isnan(z_coordinate) == 1) return;
 
-        vec4 drag_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
-        drag_vector = normalize_v4(drag_vector);
+    vec4 drag_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
+    drag_vector = normalize_v4(drag_vector);
 
-        
-            // Take the cross product to get the rotate about vector
-            vec4 rotation_vector = crossprod_v4(click_vector, drag_vector);
-            rotation_vector = normalize_v4(rotation_vector);
+    // Take the cross product to get the rotate about vector
+    vec4 rotation_vector = crossprod_v4(click_vector, drag_vector);
+    rotation_vector = normalize_v4(rotation_vector);
 
-            // If the subtraction results in a nan, don't rotate
-            if(isnan(rotation_vector.x) || isnan(rotation_vector.y) ||  isnan(rotation_vector.z) || isnan(rotation_vector.w)) return;
+    // If the subtraction results in a nan, don't rotate
+    if(isnan(rotation_vector.x) || isnan(rotation_vector.y) ||  isnan(rotation_vector.z) || isnan(rotation_vector.w)) return;
 
-            GLfloat ax = rotation_vector.x;
-            GLfloat ay = rotation_vector.y;
-            GLfloat az = rotation_vector.z;
-            GLfloat d = sqrt(pow(ay, 2) + pow(az, 2));
+    GLfloat ax = rotation_vector.x;
+    GLfloat ay = rotation_vector.y;
+    GLfloat az = rotation_vector.z;
+    GLfloat d = sqrt(pow(ay, 2) + pow(az, 2));
 
-            if(is_first_rotation){
-                previous_rotation_matrix = ctm;
-                is_first_rotation = 0;
-            }
+    if(is_first_rotation){
+        previous_rotation_matrix = ctm;
+        is_first_rotation = 0;
+    }
 
-            mat4 rotation_matrix;
+    ctm = matrixmult_mat4(translation(-((left + right) / 2), -((bottom + top) / 2), -((near + far) / 2)), previous_rotation_matrix);
+    ctm = matrixmult_mat4(rotate_arbitrary_x(ay, az, d), ctm);
+    ctm = matrixmult_mat4(rotate_arbitrary_y(ax, d), ctm);
 
-            ctm = matrixmult_mat4(translation(-((left + right) / 2), -((bottom + top) / 2), -((near + far) / 2)), previous_rotation_matrix);
-            ctm = matrixmult_mat4(rotate_arbitrary_x(ay, az, d), ctm);
-            ctm = matrixmult_mat4(rotate_arbitrary_y(ax, d), ctm);
+    float z_degrees = acos(dotprod_v4(click_vector, drag_vector)) * 180.0 / M_PI;
+    ctm = matrixmult_mat4(rotate_z(z_degrees), ctm);
 
-            float z_degrees = acos(dotprod_v4(click_vector, drag_vector)) * 180.0 / M_PI;
-            ctm = matrixmult_mat4(rotate_z(z_degrees), ctm);
-
-            ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_y(ax, d)), ctm);
-            ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_x(ay, az, d)), ctm);
-            ctm = matrixmult_mat4(translation(((left + right) / 2), ((bottom + top) / 2), ((near + far) / 2)), ctm);
+    ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_y(ax, d)), ctm);
+    ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_x(ay, az, d)), ctm);
+    ctm = matrixmult_mat4(translation(((left + right) / 2), ((bottom + top) / 2), ((near + far) / 2)), ctm);
 
             sun_ctm = ctm;
-    }
-    else return;
-
 
     glutPostRedisplay();
 }
@@ -1374,53 +1387,27 @@ void idle(void)
         return;
     }
 
-    // Are the start and end positions the same?
-    if(equal_v4(target_pos.eye, current_pos.eye) && equal_v4(target_pos.at, current_pos.at) && equal_v4(target_pos.up, current_pos.up))
-    {
-        is_animating = 0;
-        return;
-    }
-
     long elapsed = get_micro_time() - animation_started;
     
     // Are we at the target yet?
     if (elapsed >= ANIMATION_DURATION)
     {
         current_pos = target_pos;
-        model_view = look_at(target_pos.eye.x, target_pos.eye.y, target_pos.eye.z, 
-                                target_pos.at.x, target_pos.at.y, target_pos.at.z, 
-                                target_pos.up.x, target_pos.up.y, target_pos.up.z);
-
+        model_view = look_at(target_pos.eye, target_pos.at, target_pos.up);
 
         // If its go to entrance, turn
-        if(current_animation_type == 1)
-        {
-            //turn(get_right_direction(player_facing));
-        }
-
-        // Arrived at destination, no longer animating
         is_animating = 0;
         do_maze_step();
-    }
-    else
-    {
+    } else {
         float progress = (float)elapsed / ANIMATION_DURATION;
         
-        vec4 eye_move_vector = sub_v4(target_pos.eye, current_pos.eye);
         vec4 eye_delta = mult_v4(eye_move_vector, progress);
         vec4 eye_temp_pos = add_v4(current_pos.eye, eye_delta);
 
-        vec4 at_move_vector = sub_v4(target_pos.at, current_pos.at);
         vec4 at_delta = mult_v4(at_move_vector, progress);
         vec4 at_temp_pos = add_v4(current_pos.at, at_delta);
 
-        vec4 up_move_vector = sub_v4(target_pos.up, current_pos.up);
-        vec4 up_delta = mult_v4(up_move_vector, progress);
-        vec4 up_temp_pos = add_v4(current_pos.up, up_delta);
-
-        model_view = look_at(eye_temp_pos.x, eye_temp_pos.y, eye_temp_pos.z, 
-                                at_temp_pos.x, at_temp_pos.y, at_temp_pos.z, 
-                                up_temp_pos.x, up_temp_pos.y, up_temp_pos.z);
+        model_view = look_at(eye_temp_pos, at_temp_pos, target_pos.up);
     }
 
     glutPostRedisplay();

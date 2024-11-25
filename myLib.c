@@ -405,19 +405,13 @@ mat4 rotate_arbitrary_y(GLfloat ax, GLfloat d) {
 
 //---------------------Viewing functions---------------------
 
-mat4 look_at(GLfloat eyex, GLfloat eyey, GLfloat eyez,
-             GLfloat atx,  GLfloat aty,  GLfloat atz,
-             GLfloat upx,  GLfloat upy,  GLfloat upz)
+mat4 look_at(vec4 eye, vec4 at, vec4 up)
 {
-    vec4 eye = (vec4) {eyex, eyey, eyez, 1.0};
-    vec4 at = (vec4) {atx, aty, atz, 1.0};
-    vec4 up = (vec4) {upx, upy, upz, 0};
-
     vec4 new_z = normalize_v4(sub_v4(eye, at));
     vec4 new_x = normalize_v4(crossprod_v4(up, new_z));
     vec4 new_y = normalize_v4(crossprod_v4(new_z, new_x));
 
-    mat4 translation_matrix = translation(-eyex, -eyey, -eyez);
+    mat4 translation_matrix = translation(-eye.x, -eye.y, -eye.z);
     mat4 rotation_matrix = (mat4)  {{new_x.x, new_y.x, new_z.x, 0}, 
                                     {new_x.y, new_y.y, new_z.y, 0}, 
                                     {new_x.z, new_y.z, new_z.z, 0}, 
