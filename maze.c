@@ -137,6 +137,7 @@ int use_ambient;
 int use_diffuse;
 int use_specular;
 int lighting_enabled;
+int use_flashlight;
 vec4 diffuse;
 vec4 specular;
 
@@ -144,6 +145,8 @@ GLuint light_enabled_location;
 GLuint use_ambient_location;
 GLuint use_diffuse_location;
 GLuint use_specular_location;
+GLuint use_flashlight_location;
+GLuint light_position_location;
 
 
 // Rotation variable so mouse and motion can interact
@@ -945,7 +948,19 @@ void init(void)
     use_specular_location = glGetUniformLocation(program, "use_specular");
     glUniform1i(use_specular_location, use_specular);
 
-    GLuint light_position_location = glGetUniformLocation(program, "light_position");
+    GLuint attenuation_constant_location = glGetUniformLocation(program, "attenuation_constant");
+    glUniform1f(attenuation_constant_location, 4.0);
+
+    GLuint attenuation_linear_location = glGetUniformLocation(program, "attenuation_linear");
+    glUniform1f(attenuation_linear_location, 3.0);
+
+    GLuint attenuation_quadratic_location = glGetUniformLocation(program, "attenuation_linear");
+    glUniform1f(attenuation_quadratic_location, 1.0);
+
+    use_flashlight_location = glGetUniformLocation(program, "use_flashlight");
+    glUniform1i(use_flashlight_location, use_flashlight);
+
+    light_position_location = glGetUniformLocation(program, "light_position");
     glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
 
     glEnable(GL_CULL_FACE);
@@ -966,9 +981,15 @@ void display(void)
     glUniformMatrix4fv(current_transformation_matrix, 1, GL_FALSE, (GLfloat *) &ctm);
     glDrawArrays(GL_TRIANGLES, 0, num_vertices - 36);
 
-    glUniformMatrix4fv(current_sun_matrix, 1, GL_FALSE, (GLfloat *) &sun_ctm);
-    glDrawArrays(GL_TRIANGLES, num_vertices - 36, num_vertices);
+    glUniformMatrix4fv(current_transformation_matrix, 1, GL_FALSE, (GLfloat *) &sun_ctm);
+    glDrawArrays(GL_TRIANGLES, num_vertices - 36, 36);
 
+    if(use_flashlight == 1) {
+        glUniform4fv(light_position_location, 1, (GLvoid *) &target_pos.eye);
+    }
+    else {
+        glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
+    }
     glutSwapBuffers();
 }
 
@@ -1277,6 +1298,29 @@ void keyboard(unsigned char key, int mousex, int mousey)
             case 'v':
                 lighting_enabled ^= 0x1;
                 glUniform1i(light_enabled_location, lighting_enabled);
+                if(lighting_enabled == 0) {
+                    use_ambient = 0;
+                    glUniform1i(use_ambient_location, use_ambient);
+                    use_diffuse = 0;
+                    glUniform1i(use_diffuse_location, use_diffuse_location);
+                    use_specular = 0;
+                    glUniform1i(use_specular_location, use_specular);
+                }
+                break;
+            case 'c':
+                if(lighting_enabled == 1) {
+                    if(use_ambient == 0 && use_diffuse == 0 && use_specular == 0) {
+                        use_flashlight ^= 0x1;
+                        glUniform1i(use_flashlight_location, use_flashlight);
+                        if(use_flashlight == 0) {
+                            glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
+                        }
+                        else {
+                            glUniform4fv(light_position_location, 1, (GLvoid *) &target_pos.eye);
+                        }
+                        printf("Flashlight: %s\n", use_flashlight == 0 ? "OFF" : "ON");
+                    }
+                }
                 break;
             case '-':
                 if(rotation_enabled)

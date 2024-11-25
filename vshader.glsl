@@ -6,6 +6,7 @@ attribute vec2 vTexCoord;
 
 varying vec2 texCoord;
 varying vec4 N, V, L;
+varying float distance;
 
 uniform mat4 ctm, model_view, projection;
 
@@ -15,8 +16,9 @@ void main()
 {
     N = normalize(model_view * ctm * vNormal);
     L = normalize(model_view * (light_position - ctm * vPosition));
-    V = normalize(vec4(0, 0, 0, 1) - model_view * ctm * vPosition);
+    V = normalize(vec4(0, 0, 0, 1) - (model_view * ctm * vPosition));
 
     texCoord = vTexCoord;
     gl_Position = projection * model_view * ctm * vPosition;
+    distance = length(model_view * (light_position - ctm * vPosition));
 }
