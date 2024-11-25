@@ -114,6 +114,8 @@ vec2 *tex_coords;
 vec4 *sun_positions;
 vec2 *sun_tex_coords;
 
+GLuint light_position_location;
+
 // Transform matrices
 #define CLIP_NEAR 0.01
 
@@ -129,7 +131,7 @@ mat4 projection = IDENTITY_M4;
 GLuint current_sun_matrix;
 mat4 sun_ctm = IDENTITY_M4;
 
-int test_val;
+int sun_rotation = 0;
 
 // Lighting
 vec4 light_position = { 1, 1, 0, 0 };
@@ -168,6 +170,7 @@ void define_blocks() {
     BLOCK_BIRCH_PLANKS = (Block) { TEXTURE_BIRCH_PLANKS, TEXTURE_BIRCH_PLANKS, TEXTURE_BIRCH_PLANKS, TEXTURE_BIRCH_PLANKS, TEXTURE_BIRCH_PLANKS, TEXTURE_BIRCH_PLANKS };
     BLOCK_BRICKS = (Block) { TEXTURE_BRICKS, TEXTURE_BRICKS, TEXTURE_BRICKS, TEXTURE_BRICKS, TEXTURE_BRICKS, TEXTURE_BRICKS };
     BLOCK_STONE_BRICKS = (Block) { TEXTURE_STONE_BRICKS, TEXTURE_STONE_BRICKS, TEXTURE_STONE_BRICKS, TEXTURE_STONE_BRICKS, TEXTURE_STONE_BRICKS, TEXTURE_STONE_BRICKS };
+
 }
 
 void set_cube_vertices(int index, float x1, float y1, float z1, float size) {
@@ -471,8 +474,7 @@ void generate_world() {
         long_length -= 2;
     }
 
-    // num_vertices = (maze_floor_blocks + maze_walls_blocks + island_blocks + 1) * 36;
-    num_vertices = (maze_floor_blocks + maze_walls_blocks + island_blocks + 10 + 1) * 36; // This is for the testing boundary blocks. DELETE BEFORE TURNING IN!!!!!
+    num_vertices = (maze_floor_blocks + maze_walls_blocks + island_blocks + 1) * 36;
 
     // Store bounds
     left = -ISLAND_PADDING;
@@ -491,24 +493,6 @@ void generate_world() {
     positions = (vec4 *) malloc(sizeof(vec4) * num_vertices);
     normals = (vec4 *) malloc(sizeof(vec4) * num_vertices);
     tex_coords = (vec2 *) malloc(sizeof(vec2) * num_vertices);
-
-    light_position = (vec4) { (left + right) / 2.0, WALL_HEIGHT + 1, (bottom + top) / 2.0, 1.0 };
-
-    // Generate bound blocks for testing purposes
-    set_block(left, top, near, BLOCK_BRICKS);
-    set_block(right, top, near, BLOCK_BRICKS);
-
-    set_block(left, bottom, near, BLOCK_BRICKS);
-    set_block(right, bottom, near, BLOCK_BRICKS);
-
-    set_block(left, top, far, BLOCK_BRICKS);
-    set_block(right, top, far, BLOCK_BRICKS);
-
-    set_block(left, bottom, far, BLOCK_BRICKS);
-    set_block(right, bottom, far, BLOCK_BRICKS);
-
-    set_block((left + right) / 2, top, (near + far) / 2, BLOCK_GRASS);
-    set_block((left + right) / 2, bottom, (near + far) / 2, BLOCK_BIRCH_PLANKS);
 
     // Generate island
     int island_x_min = -ISLAND_PADDING;
@@ -612,10 +596,9 @@ void generate_world() {
     generate_maze_wall(right_pos, bottom_pos, BLOCK_STONE_BRICKS);
 
     // Generate the sun
-    set_block((left + right) / 2, top + 10, (near + far) / 2, BLOCK_BIRCH_PLANKS);
-    //test_val = (left + right) / 2;
-    test_val = 0;
+    set_block((left + right) / 2, top, (bottom + top) / 2, BLOCK_BIRCH_PLANKS);
 
+    light_position = (vec4) { (left + right) / 2, WALL_HEIGHT + 1, (bottom + top) / 2, 1.0 };
 
     // Set actual number of vertices
     num_vertices = vertex_index;
@@ -945,7 +928,7 @@ void init(void)
     use_specular_location = glGetUniformLocation(program, "use_specular");
     glUniform1i(use_specular_location, use_specular);
 
-    GLuint light_position_location = glGetUniformLocation(program, "light_position");
+    light_position_location = glGetUniformLocation(program, "light_position");
     glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
 
     glEnable(GL_CULL_FACE);
@@ -962,12 +945,13 @@ void display(void)
     glUniformMatrix4fv(model_view_location, 1, GL_FALSE, (GLfloat *) &model_view);
     glUniformMatrix4fv(projection_location, 1, GL_FALSE, (GLfloat *) &projection);
 
-
     glUniformMatrix4fv(current_transformation_matrix, 1, GL_FALSE, (GLfloat *) &ctm);
     glDrawArrays(GL_TRIANGLES, 0, num_vertices - 36);
 
-    glUniformMatrix4fv(current_sun_matrix, 1, GL_FALSE, (GLfloat *) &sun_ctm);
-    glDrawArrays(GL_TRIANGLES, num_vertices - 36, num_vertices);
+    glUniformMatrix4fv(current_transformation_matrix, 1, GL_FALSE, (GLfloat *) &sun_ctm);
+    glDrawArrays(GL_TRIANGLES, num_vertices - 36, 36);
+
+    glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
 
     glutSwapBuffers();
 }
@@ -1208,6 +1192,16 @@ void set_side_view() {
     start_animation();
 }
 
+void rotate_sun(int degrees)
+{
+    //sun_ctm = translation(-((left + right) / 2), 0, -((near + far) / 2));
+    sun_ctm = matrixmult_mat4(translation(-((left + right) / 2), 0, -((top + bottom) / 2)), sun_ctm);
+    sun_ctm = matrixmult_mat4(rotate_z(degrees), sun_ctm);
+    sun_ctm = matrixmult_mat4(translation(((left + right) / 2), 0, ((top + bottom) / 2)), sun_ctm);
+
+    light_position = vectormult_mat4(rotate_z(degrees), light_position);
+}
+
 void keyboard(unsigned char key, int mousex, int mousey)
 {
     // If we're animating, don't accept keyboard commands
@@ -1294,13 +1288,14 @@ void keyboard(unsigned char key, int mousex, int mousey)
                     start_animation();
                 }
                 break;
-            case 'k':
-                // test_val += 50;
-                // printf("%d\n", test_val);
-                // sun_ctm = translation(test_val, 0, 0);
-
+            case '1':
+                sun_rotation += 45;
+                rotate_sun(45);
                 break;
-            
+            case '2':
+                sun_rotation -= 45;
+                rotate_sun(-45);
+                break;
         }
 
         glutPostRedisplay();
@@ -1369,6 +1364,8 @@ void motion(int x, int y) {
     ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_y(ax, d)), ctm);
     ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_x(ay, az, d)), ctm);
     ctm = matrixmult_mat4(translation(((left + right) / 2), ((bottom + top) / 2), ((near + far) / 2)), ctm);
+
+            sun_ctm = ctm;
 
     glutPostRedisplay();
 }
