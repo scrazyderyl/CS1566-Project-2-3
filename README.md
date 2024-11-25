@@ -20,3 +20,18 @@ L - Rotate Right
 T - Topdown View\
 R - Reset to Side View\
 E - Go to Entrance
+
+'-' - Zoom Out\
+'+' = Zoom In\
+
+## Solve
+P - Solve from Entrance\
+I - Solve from Current Position\
+
+## Lighting
+V - Toggle Light\
+B - Ambient Light\
+N - Diffuse Light\
+M - Specular Light\
+1 - Rotate Sun Counterclockwise\
+2 - Rotate Sun Clockwise\

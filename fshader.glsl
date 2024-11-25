@@ -42,7 +42,7 @@ void main()
 			else
 				specular = vec4(0, 0, 0, 1);
 			float attenuation = 1 / (attenuation_constant + (attenuation_linear * distance) + (attenuation_quadratic * distance * distance));
-			gl_FragColor = ambient + attenuation * (diffuse + specular);
+			gl_FragColor = ambient + (diffuse + specular);
 		}
 	}
 	else
