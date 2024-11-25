@@ -1202,16 +1202,6 @@ void rotate_sun(int degrees)
     light_position = vectormult_mat4(rotate_z(degrees), light_position);
 }
 
-void rotate_sun(int degrees)
-{
-    //sun_ctm = translation(-((left + right) / 2), 0, -((near + far) / 2));
-    sun_ctm = matrixmult_mat4(translation(-((left + right) / 2), 0, -((top + bottom) / 2)), sun_ctm);
-    sun_ctm = matrixmult_mat4(rotate_z(degrees), sun_ctm);
-    sun_ctm = matrixmult_mat4(translation(((left + right) / 2), 0, ((top + bottom) / 2)), sun_ctm);
-
-    light_position = vectormult_mat4(rotate_z(degrees), light_position);
-}
-
 void keyboard(unsigned char key, int mousex, int mousey)
 {
     // If we're animating, don't accept keyboard commands
