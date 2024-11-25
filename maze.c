@@ -833,7 +833,6 @@ void print_helper_text()
     printf("I - Solve From Anywhere\n");
 
     printf("\n---------[Camera]---------\n");
-    printf("T - Topdown View\n");
     printf("R - Reset to Side View\n");
     printf("E - Go to Entrance\n");
 
@@ -847,6 +846,7 @@ void print_helper_text()
     printf("M - toggle Specular\n");
     printf("1 - Rotate Sun Counterclockwise\n");
     printf("2 - Rotate Sun Clockwise\n");
+    printf("M - Toggle Specular\n");
 
 
     printf("\n");
@@ -1072,14 +1072,9 @@ void set_trackball_pos(vec4 eye, vec4 up) {
     start_animation();
 }
 
-void set_topdown_view() {
-    vec4 eye = (vec4) {island_center.x, max_side, island_center.z, 1.0};
-    vec4 up = (vec4) {0, 0, -1, 0};
-
-    set_trackball_pos(eye, up);
-}
-
 void set_side_view() {
+    vec4 eye_offset = vectormult_mat4(ctm, (vec4) { 0, 0, -distance_from_center, 0 });
+    current_pos.eye = add_v4(eye_offset, island_center);
     vec4 eye = (vec4) {island_center.x, 0, max_side, 0.0};
     vec4 up = (vec4) {0.0, 1.0, 0.0, 0.0};
 
@@ -1126,10 +1121,6 @@ void keyboard(unsigned char key, int mousex, int mousey)
             break;
         case 'l':
             turn(get_right_direction(player_facing));
-            break;
-        case 't':
-            // Reset View
-            set_topdown_view();
             break;
         case 'e':
             go_to_entrance();
