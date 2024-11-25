@@ -93,6 +93,7 @@ Cell **maze;
 int maze_width;
 int maze_height;
 int left, right, bottom, top, near, far; // Island bounds
+vec4 island_center;
 int max_side;
 
 // Player location in maze
@@ -151,6 +152,7 @@ GLuint use_specular_location;
 // Rotation variable so mouse and motion can interact
 vec4 click_vector;
 mat4 previous_rotation_matrix;
+float distance_from_center;
 int rotation_enabled = 1;
 int is_first_rotation = 1;
 
@@ -483,6 +485,13 @@ void generate_world() {
     top = total_y_size + 2;
     near = total_z_size - ISLAND_PADDING - 1;
     far = -ISLAND_PADDING;
+
+    island_center = (vec4) {
+        (float)(left + right) / 2,
+        (float)(top + bottom) / 2,
+        (float)(near + far) / 2,
+        1
+    };
 
     printf("X: %d, Y: %d Z: %d\n", total_x_size, total_y_size, total_z_size);
     printf("Left: %d Right: %d\n", left, right);
@@ -841,121 +850,6 @@ void print_helper_text()
     
 }
 
-void init(void)
-{
-    // Set starting location
-    float center_x = (float)(left + right) / 2;
-
-    vec4 new_eye = (vec4) {center_x, 0, 1.5 * max_side, 0.0};
-    vec4 new_at = (vec4) {center_x, 0, 0, 0.0};
-    vec4 new_up = (vec4) {0.0, 1.0, 0.0, 0.0};
-
-    current_pos = (view_position) {new_eye, new_at, new_up};
-    model_view = look_at(new_eye, new_at, new_up);
-
-    // Load textures
-    int tex_width = 64;
-    int tex_height = 64;
-    GLubyte my_texels[tex_width][tex_height][3];
-
-    FILE *fp = fopen("textures02.raw", "r");
-    fread(my_texels, tex_width * tex_height * 3, 1, fp);
-    fclose(fp);
-
-    GLuint mytex[1];
-    glGenTextures(1, mytex);
-    glBindTexture(GL_TEXTURE_2D, mytex[0]);
-    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_width, tex_height, 0, GL_RGB, GL_UNSIGNED_BYTE, my_texels);
-    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
-    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
-    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
-    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
-
-    int param;
-    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &param);
-
-    // Initialize buffers
-    GLuint vao;
-    #ifdef __APPLE__
-    glGenVertexArraysAPPLE(1, &vao);
-    glBindVertexArrayAPPLE(vao);
-    #else
-    glGenVertexArrays(1, &vao);
-    glBindVertexArray(vao);
-    #endif
-
-    GLuint buffer;
-    glGenBuffers(1, &buffer);
-    glBindBuffer(GL_ARRAY_BUFFER, buffer);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * 2 * num_vertices + sizeof(vec2) * num_vertices, NULL, GL_STATIC_DRAW);
-    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec4) * num_vertices, positions);
-    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, sizeof(vec4) * num_vertices, normals);
-    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * 2 * num_vertices, sizeof(vec2) * num_vertices, tex_coords);
-
-    // Initialize program
-    GLuint program = initShader("vshader.glsl", "fshader.glsl");
-    glUseProgram(program);
-
-    GLuint vPosition = glGetAttribLocation(program, "vPosition");
-    glEnableVertexAttribArray(vPosition);
-    glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (0));
-
-    GLuint vNormal = glGetAttribLocation(program, "vNormal");
-    glEnableVertexAttribArray(vNormal);
-    glVertexAttribPointer(vNormal, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * num_vertices));
-    
-    GLuint vTexCoord = glGetAttribLocation(program, "vTexCoord");
-    glEnableVertexAttribArray(vTexCoord);
-    glVertexAttribPointer(vTexCoord, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * 2 * num_vertices));
-
-    current_transformation_matrix = glGetUniformLocation(program, "ctm");
-    model_view_location = glGetUniformLocation(program, "model_view");
-    projection_location = glGetUniformLocation(program, "projection");
-    projection = frustum(-CLIP_NEAR, CLIP_NEAR, -CLIP_NEAR, CLIP_NEAR, -CLIP_NEAR, -100000);
-
-    GLuint texture_location = glGetUniformLocation(program, "texture");
-    glUniform1i(texture_location, 0);
-
-    light_enabled_location = glGetUniformLocation(program, "lighting_enabled");
-    glUniform1i(light_enabled_location, lighting_enabled);
-
-    use_ambient_location = glGetUniformLocation(program, "use_ambient");
-    glUniform1i(use_ambient_location, use_ambient);
-
-    use_diffuse_location = glGetUniformLocation(program, "use_diffuse");
-    glUniform1i(use_diffuse_location, use_diffuse);
-
-    use_specular_location = glGetUniformLocation(program, "use_specular");
-    glUniform1i(use_specular_location, use_specular);
-
-    light_position_location = glGetUniformLocation(program, "light_position");
-    glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
-
-    glEnable(GL_CULL_FACE);
-    glEnable(GL_DEPTH_TEST);
-    glClearColor(0.0, 0.0, 0.0, 1.0);
-    glDepthRange(1,0);
-}
-
-void display(void)
-{
-    glClearColor(120.0/255.0, 167.0/255.0, 1.0, 1.0); // Set clear color to the minecraft sky color
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-    
-    glUniformMatrix4fv(model_view_location, 1, GL_FALSE, (GLfloat *) &model_view);
-    glUniformMatrix4fv(projection_location, 1, GL_FALSE, (GLfloat *) &projection);
-
-    glUniformMatrix4fv(current_transformation_matrix, 1, GL_FALSE, (GLfloat *) &ctm);
-    glDrawArrays(GL_TRIANGLES, 0, num_vertices - 36);
-
-    glUniformMatrix4fv(current_transformation_matrix, 1, GL_FALSE, (GLfloat *) &sun_ctm);
-    glDrawArrays(GL_TRIANGLES, num_vertices - 36, 36);
-
-    glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
-
-    glutSwapBuffers();
-}
-
 void update_positions(vec4 position, int facing) {
     float x = position.x;
     float y = position.y;
@@ -1149,47 +1043,36 @@ void go_to_entrance()
     start_animation();
 }
 
-// Sets the view to a towdown view of the maze
-void set_topdown_view() {
-    float center_x = (float)(left + right) / 2;
-    float center_z = (float)(near + far) / 2;
+// Changes eye distance from at point while maintaining VPN
+void fix_eye_dist() {
+    vec4 vpn = normalize_v4(sub_v4(target_pos.eye, target_pos.at));
+    vec4 new_eye = add_v4(target_pos.at, mult_v4(vpn, distance_from_center));
 
-    vec4 new_eye = (vec4) {center_x, 1.5 * max_side, center_z, 1.0};
-    vec4 new_at = (vec4) {center_x, 0, center_z, 1.0};
-    vec4 new_up = (vec4) {0, 0, -1, 0};
+    target_pos.eye = new_eye;
+}
 
-    // Set the position of the viewer
-    target_pos = (view_position) {new_eye, new_at, new_up};
+void set_trackball_pos(vec4 eye, vec4 up) {
+    target_pos = (view_position) { eye, island_center, up };
+    fix_eye_dist();
     ctm = m4_identity();
-
-    // Have the rotation remember that you're looking from the top now
     previous_rotation_matrix = ctm;
-
-    // Re-enable Rotation
     rotation_enabled = 1;
 
     start_animation();
 }
 
-// Sets the view to the default side view
+void set_topdown_view() {
+    vec4 eye = (vec4) {island_center.x, max_side, island_center.z, 1.0};
+    vec4 up = (vec4) {0, 0, -1, 0};
+
+    set_trackball_pos(eye, up);
+}
+
 void set_side_view() {
-    float center_x = (float)(left + right) / 2;
-    
-    // Set the position of the viewer
-    vec4 new_eye = (vec4) {center_x, 0, 1.5 * max_side, 0.0};
-    vec4 new_at = (vec4) {center_x, 0, 0, 0.0};
-    vec4 new_up = (vec4) {0.0, 1.0, 0.0, 0.0};
+    vec4 eye = (vec4) {island_center.x, 0, max_side, 0.0};
+    vec4 up = (vec4) {0.0, 1.0, 0.0, 0.0};
 
-    target_pos = (view_position) {new_eye, new_at, new_up};
-    ctm = m4_identity();
-
-    // Have the rotation remember that you're looking from the side now
-    previous_rotation_matrix = ctm;
-
-    // Re-enable Rotation
-    rotation_enabled = 1;
-
-    start_animation();
+    set_trackball_pos(eye, up);
 }
 
 void rotate_sun(int degrees)
@@ -1205,169 +1088,182 @@ void rotate_sun(int degrees)
 void keyboard(unsigned char key, int mousex, int mousey)
 {
     // If we're animating, don't accept keyboard commands
-    if(! is_animating)
+    if (is_animating)
     {
-        switch(key) 
-        {
-            case 'q':
-                exit(0);
-            case 'w':
-                move_direction(player_facing);
-                break;
-            case 'a':
-                move_direction(get_left_direction(player_facing));
-                break;
-            case 's':
-                move_direction(get_behind_direction(player_facing));
-                break;
-            case 'd':
-                move_direction(get_right_direction(player_facing));
-                break;
-            case 'j':
-                turn(get_left_direction(player_facing));
-                break;
-            case 'l':
-                turn(get_right_direction(player_facing));
-                break;
-            case 't':
-                // Reset View
-                set_topdown_view();
-                break;
-            case 'e':
-                go_to_entrance();
-                break;
-            case 'r':
-                set_side_view();
-                break;
-            case 'p':
-                if (maze_x == 0 && maze_y == 0) {
-                    navigate(dfs);
-                }
-                break;
-            case 'i':
-                navigate(dfs_anyposition);
-                break;
-            case 'b':
-                if(lighting_enabled == 1) {
-                    use_ambient ^= 0x1;
-                    glUniform1i(use_ambient_location, use_ambient);
-                    printf("Ambient: %s\n", use_ambient == 0 ? "OFF" : "ON");
-                }
-                break;
-            case 'n':
-                if(lighting_enabled == 1) {
-                    use_diffuse ^= 0x1;
-                    glUniform1i(use_diffuse_location, use_diffuse);
-                    printf("Diffuse: %s\n", use_diffuse == 0 ? "OFF" : "ON");
-                }
-                break;
-            case 'm':
-                if(lighting_enabled == 1) {
-                    use_specular ^= 0x1;
-                    glUniform1i(use_specular_location, use_specular);
-                    printf("Specular: %s\n", use_specular == 0 ? "OFF" : "ON");
-                }
-                break;
-            case 'v':
-                lighting_enabled ^= 0x1;
-                glUniform1i(light_enabled_location, lighting_enabled);
-                break;
-            case '-':
-                if(rotation_enabled)
-                {
-                    target_pos = current_pos;
-                    target_pos.eye = add_v4(current_pos.eye, (vec4) {0, 0, 10, 0.0});
-                    start_animation();
-                }
-                break;
-            case '=':
-                if(rotation_enabled)
-                {
-                    target_pos = current_pos;
-                    target_pos.eye = sub_v4(current_pos.eye, (vec4) {0, 0, 10, 0.0});
-                    start_animation();
-                }
-                break;
-            case '1':
-                sun_rotation += 45;
-                rotate_sun(45);
-                break;
-            case '2':
-                sun_rotation -= 45;
-                rotate_sun(-45);
-                break;
-        }
-
-        glutPostRedisplay();
+        return;
     }
+
+    switch(key) 
+    {
+        case 'q':
+            exit(0);
+        case 'w':
+            move_direction(player_facing);
+            break;
+        case 'a':
+            move_direction(get_left_direction(player_facing));
+            break;
+        case 's':
+            move_direction(get_behind_direction(player_facing));
+            break;
+        case 'd':
+            move_direction(get_right_direction(player_facing));
+            break;
+        case 'j':
+            turn(get_left_direction(player_facing));
+            break;
+        case 'l':
+            turn(get_right_direction(player_facing));
+            break;
+        case 't':
+            // Reset View
+            set_topdown_view();
+            break;
+        case 'e':
+            go_to_entrance();
+            break;
+        case 'r':
+            set_side_view();
+            break;
+        case 'p':
+            if (maze_x == 0 && maze_y == 0) {
+                navigate(dfs);
+            }
+            break;
+        case 'i':
+            navigate(dfs_anyposition);
+            break;
+        case 'b':
+            if(lighting_enabled == 1) {
+                use_ambient ^= 0x1;
+                glUniform1i(use_ambient_location, use_ambient);
+                printf("Ambient: %s\n", use_ambient == 0 ? "OFF" : "ON");
+            }
+            break;
+        case 'n':
+            if(lighting_enabled == 1) {
+                use_diffuse ^= 0x1;
+                glUniform1i(use_diffuse_location, use_diffuse);
+                printf("Diffuse: %s\n", use_diffuse == 0 ? "OFF" : "ON");
+            }
+            break;
+        case 'm':
+            if(lighting_enabled == 1) {
+                use_specular ^= 0x1;
+                glUniform1i(use_specular_location, use_specular);
+                printf("Specular: %s\n", use_specular == 0 ? "OFF" : "ON");
+            }
+            break;
+        case 'v':
+            lighting_enabled ^= 0x1;
+            glUniform1i(light_enabled_location, lighting_enabled);
+            break;
+        case '-':
+            if(rotation_enabled)
+            {
+                target_pos = current_pos;
+                target_pos.eye = add_v4(current_pos.eye, (vec4) {0, 0, 10, 0.0});
+                start_animation();
+            }
+            break;
+        case '=':
+            if(rotation_enabled)
+            {
+                target_pos = current_pos;
+                target_pos.eye = sub_v4(current_pos.eye, (vec4) {0, 0, 10, 0.0});
+                start_animation();
+            }
+            break;
+        case 'k':
+            // test_val += 50;
+            // printf("%d\n", test_val);
+            // sun_ctm = translation(test_val, 0, 0);
+
+            break;
+        
+    }
+
+    glutPostRedisplay();
 }
 
 void mouse(int button, int state, int x, int y) {
-    if(state == GLUT_DOWN && button == GLUT_LEFT_BUTTON) {
-        if(rotation_enabled)
-        {
-            float x_coordinate = (x * 2.0 / 1023.0) - 1;
-            float y_coordinate = -((y * 2.0 / 1023.0) - 1);
-            float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
-
-            click_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
-            click_vector = normalize_v4(click_vector);
-        }
-    } 
-
-    if(state == GLUT_UP && button == GLUT_LEFT_BUTTON) {
-        previous_rotation_matrix = ctm;
-    }
-    
-}
-
-void motion(int x, int y) {
-    if (!rotation_enabled) 
+    if (is_animating)
     {
         return;
     }
     
-    float x_coordinate = (x * 2.0 / 1023.0) - 1;
-    float y_coordinate = -((y * 2.0 / 1023.0) - 1);
-    float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
+    switch (button) {
+        case GLUT_LEFT_BUTTON:
+            if (rotation_enabled) {
+                // Rotation
+                if (state == GLUT_DOWN) {
+                    float x_coordinate = (x * 2.0 / 1023.0) - 1;
+                    float y_coordinate = -((y * 2.0 / 1023.0) - 1);
+                    float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
 
-    // Disable rotation if z is nan
-    if(isnan(z_coordinate) == 1) return;
+                    click_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
+                    click_vector = normalize_v4(click_vector);
+                } else {
+                    previous_rotation_matrix = ctm;
+                }
+            } else {
+                // Flashlight
+            }
 
-    vec4 drag_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
-    drag_vector = normalize_v4(drag_vector);
+            break;
+    }
+}
+
+void motion(int x, int y) {
+    if (is_animating)
+    {
+        return;
+    }
+    
+    if (rotation_enabled) {
+        // Rotation
+        float x_coordinate = (x * 2.0 / 1023.0) - 1;
+        float y_coordinate = -((y * 2.0 / 1023.0) - 1);
+        float z_coordinate = sqrt(1 - pow(x_coordinate, 2) - pow(y_coordinate, 2));
+
+        // Disable rotation if z is nan
+        if(isnan(z_coordinate) == 1) return;
+
+        vec4 drag_vector = (vec4) {x_coordinate, y_coordinate, z_coordinate, 0.0};
+        drag_vector = normalize_v4(drag_vector);
 
     // Take the cross product to get the rotate about vector
     vec4 rotation_vector = crossprod_v4(click_vector, drag_vector);
     rotation_vector = normalize_v4(rotation_vector);
 
-    // If the subtraction results in a nan, don't rotate
-    if(isnan(rotation_vector.x) || isnan(rotation_vector.y) ||  isnan(rotation_vector.z) || isnan(rotation_vector.w)) return;
+        // If the subtraction results in a nan, don't rotate
+        if(isnan(rotation_vector.x) || isnan(rotation_vector.y) ||  isnan(rotation_vector.z) || isnan(rotation_vector.w)) return;
 
-    GLfloat ax = rotation_vector.x;
-    GLfloat ay = rotation_vector.y;
-    GLfloat az = rotation_vector.z;
-    GLfloat d = sqrt(pow(ay, 2) + pow(az, 2));
+        GLfloat ax = rotation_vector.x;
+        GLfloat ay = rotation_vector.y;
+        GLfloat az = rotation_vector.z;
+        GLfloat d = sqrt(pow(ay, 2) + pow(az, 2));
 
     if(is_first_rotation){
         previous_rotation_matrix = ctm;
         is_first_rotation = 0;
     }
 
-    ctm = matrixmult_mat4(translation(-((left + right) / 2), -((bottom + top) / 2), -((near + far) / 2)), previous_rotation_matrix);
-    ctm = matrixmult_mat4(rotate_arbitrary_x(ay, az, d), ctm);
-    ctm = matrixmult_mat4(rotate_arbitrary_y(ax, d), ctm);
+        ctm = matrixmult_mat4(translation(-((left + right) / 2), -((bottom + top) / 2), -((near + far) / 2)), previous_rotation_matrix);
+        ctm = matrixmult_mat4(rotate_arbitrary_x(ay, az, d), ctm);
+        ctm = matrixmult_mat4(rotate_arbitrary_y(ax, d), ctm);
 
-    float z_degrees = acos(dotprod_v4(click_vector, drag_vector)) * 180.0 / M_PI;
-    ctm = matrixmult_mat4(rotate_z(z_degrees), ctm);
+        float z_degrees = acos(dotprod_v4(click_vector, drag_vector)) * 180.0 / M_PI;
+        ctm = matrixmult_mat4(rotate_z(z_degrees), ctm);
 
-    ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_y(ax, d)), ctm);
-    ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_x(ay, az, d)), ctm);
-    ctm = matrixmult_mat4(translation(((left + right) / 2), ((bottom + top) / 2), ((near + far) / 2)), ctm);
+        ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_y(ax, d)), ctm);
+        ctm = matrixmult_mat4(transpose_mat4(rotate_arbitrary_x(ay, az, d)), ctm);
+        ctm = matrixmult_mat4(translation(((left + right) / 2), ((bottom + top) / 2), ((near + far) / 2)), ctm);
 
-            sun_ctm = ctm;
-
-    glutPostRedisplay();
+        glutPostRedisplay();
+    } else {
+        // Flashlight
+    }
 }
 
 void idle(void)
@@ -1401,6 +1297,117 @@ void idle(void)
     }
 
     glutPostRedisplay();
+}
+
+void init(void)
+{
+    // Set starting location
+    distance_from_center = 1.25 * max_side;
+    set_side_view();
+    current_pos = target_pos;
+    model_view = look_at(current_pos.eye, current_pos.at, current_pos.up);
+    is_animating = 0;
+
+    // Load textures
+    int tex_width = 64;
+    int tex_height = 64;
+    GLubyte my_texels[tex_width][tex_height][3];
+
+    FILE *fp = fopen("textures02.raw", "r");
+    fread(my_texels, tex_width * tex_height * 3, 1, fp);
+    fclose(fp);
+
+    GLuint mytex[1];
+    glGenTextures(1, mytex);
+    glBindTexture(GL_TEXTURE_2D, mytex[0]);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, tex_width, tex_height, 0, GL_RGB, GL_UNSIGNED_BYTE, my_texels);
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT );
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT );
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST );
+    glTexParameterf( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST );
+
+    int param;
+    glGetTexLevelParameteriv(GL_TEXTURE_2D, 0, GL_TEXTURE_WIDTH, &param);
+
+    // Initialize buffers
+    GLuint vao;
+    #ifdef __APPLE__
+    glGenVertexArraysAPPLE(1, &vao);
+    glBindVertexArrayAPPLE(vao);
+    #else
+    glGenVertexArrays(1, &vao);
+    glBindVertexArray(vao);
+    #endif
+
+    GLuint buffer;
+    glGenBuffers(1, &buffer);
+    glBindBuffer(GL_ARRAY_BUFFER, buffer);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(vec4) * 2 * num_vertices + sizeof(vec2) * num_vertices, NULL, GL_STATIC_DRAW);
+    glBufferSubData(GL_ARRAY_BUFFER, 0, sizeof(vec4) * num_vertices, positions);
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * num_vertices, sizeof(vec4) * num_vertices, normals);
+    glBufferSubData(GL_ARRAY_BUFFER, sizeof(vec4) * 2 * num_vertices, sizeof(vec2) * num_vertices, tex_coords);
+
+    // Initialize program
+    GLuint program = initShader("vshader.glsl", "fshader.glsl");
+    glUseProgram(program);
+
+    GLuint vPosition = glGetAttribLocation(program, "vPosition");
+    glEnableVertexAttribArray(vPosition);
+    glVertexAttribPointer(vPosition, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (0));
+
+    GLuint vNormal = glGetAttribLocation(program, "vNormal");
+    glEnableVertexAttribArray(vNormal);
+    glVertexAttribPointer(vNormal, 4, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * num_vertices));
+    
+    GLuint vTexCoord = glGetAttribLocation(program, "vTexCoord");
+    glEnableVertexAttribArray(vTexCoord);
+    glVertexAttribPointer(vTexCoord, 2, GL_FLOAT, GL_FALSE, 0, (GLvoid *) (sizeof(vec4) * 2 * num_vertices));
+
+    current_transformation_matrix = glGetUniformLocation(program, "ctm");
+    model_view_location = glGetUniformLocation(program, "model_view");
+    projection_location = glGetUniformLocation(program, "projection");
+    projection = frustum(-CLIP_NEAR, CLIP_NEAR, -CLIP_NEAR, CLIP_NEAR, -CLIP_NEAR, -100000);
+
+    GLuint texture_location = glGetUniformLocation(program, "texture");
+    glUniform1i(texture_location, 0);
+
+    light_enabled_location = glGetUniformLocation(program, "lighting_enabled");
+    glUniform1i(light_enabled_location, lighting_enabled);
+
+    use_ambient_location = glGetUniformLocation(program, "use_ambient");
+    glUniform1i(use_ambient_location, use_ambient);
+
+    use_diffuse_location = glGetUniformLocation(program, "use_diffuse");
+    glUniform1i(use_diffuse_location, use_diffuse);
+
+    use_specular_location = glGetUniformLocation(program, "use_specular");
+    glUniform1i(use_specular_location, use_specular);
+
+    GLuint light_position_location = glGetUniformLocation(program, "light_position");
+    glUniform4fv(light_position_location, 1, (GLvoid *) &light_position);
+
+    glEnable(GL_CULL_FACE);
+    glEnable(GL_DEPTH_TEST);
+    glClearColor(0.0, 0.0, 0.0, 1.0);
+    glDepthRange(1,0);
+}
+
+void display(void)
+{
+    glClearColor(120.0/255.0, 167.0/255.0, 1.0, 1.0); // Set clear color to the minecraft sky color
+    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    
+    glUniformMatrix4fv(model_view_location, 1, GL_FALSE, (GLfloat *) &model_view);
+    glUniformMatrix4fv(projection_location, 1, GL_FALSE, (GLfloat *) &projection);
+
+
+    glUniformMatrix4fv(current_transformation_matrix, 1, GL_FALSE, (GLfloat *) &ctm);
+    glDrawArrays(GL_TRIANGLES, 0, num_vertices - 36);
+
+    glUniformMatrix4fv(current_sun_matrix, 1, GL_FALSE, (GLfloat *) &sun_ctm);
+    glDrawArrays(GL_TRIANGLES, num_vertices - 36, num_vertices);
+
+    glutSwapBuffers();
 }
 
 int main(int argc, char **argv)
