@@ -162,49 +162,6 @@ vec4 at_move_vector;
 
 view_position current_pos, target_pos;
 
-// Sets the view to a towdown view of the maze
-void set_topdown_view() {
-    float center_x = (float)(left + right) / 2;
-    float center_z = (float)(near + far) / 2;
-
-    vec4 new_eye = (vec4) {center_x, 1.5 * max_side, center_z, 1.0};
-    vec4 new_at = (vec4) {center_x, 0, center_z, 1.0};
-    vec4 new_up = (vec4) {0, 0, -1, 0};
-
-    // Set the position of the viewer
-    target_pos = (view_position) {new_eye, new_at, new_up};
-    ctm = m4_identity();
-
-    // Have the rotation remember that you're looking from the top now
-    previous_rotation_matrix = ctm;
-
-    // Re-enable Rotation
-    rotation_enabled = 1;
-
-    start_animation();
-}
-
-// Sets the view to the default side view
-void set_side_view() {
-    float center_x = (float)(left + right) / 2;
-    
-    // Set the position of the viewer
-    vec4 new_eye = (vec4) {center_x, 0, 1.5 * max_side, 0.0};
-    vec4 new_at = (vec4) {center_x, 0, 0, 0.0};
-    vec4 new_up = (vec4) {0.0, 1.0, 0.0, 0.0};
-
-    target_pos = (view_position) {new_eye, new_at, new_up};
-    ctm = m4_identity();
-
-    // Have the rotation remember that you're looking from the side now
-    previous_rotation_matrix = ctm;
-
-    // Re-enable Rotation
-    rotation_enabled = 1;
-
-    start_animation();
-}
-
 void define_blocks() {
     BLOCK_GRASS = (Block) { TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_TOP, TEXTURE_DIRT, TEXTURE_GRASS_SIDE, TEXTURE_GRASS_SIDE };
     BLOCK_DIRT = (Block) { TEXTURE_DIRT, TEXTURE_DIRT, TEXTURE_DIRT, TEXTURE_DIRT, TEXTURE_DIRT, TEXTURE_DIRT };
@@ -1049,12 +1006,12 @@ void start_animation() {
 
 void move_to(vec4 position) {
     update_positions(position, player_facing);
-    start_animation(0);
+    start_animation();
 }
 
 void turn_to(int direction) {
     update_positions(current_pos.eye, direction);
-    start_animation(0);
+    start_animation();
 }
 
 void move_to_cell(int x, int y) {
@@ -1138,7 +1095,7 @@ void do_maze_step() {
     if (current_step->next == NULL) {
         if (player_facing != 0) {
             turn_to(0);
-            start_animation(0);
+            start_animation();
         }
 
         current_step = NULL;
@@ -1171,7 +1128,7 @@ void do_maze_step() {
         current_step = next;
     }
 
-    start_animation(0);
+    start_animation();
 }
 
 void free_path() {
@@ -1205,7 +1162,50 @@ void go_to_entrance()
     target_pos.up = (vec4) {0, 1, 0, 0.0};
 
     move_to_cell(0, 0);
-    start_animation(1);
+    start_animation();
+}
+
+// Sets the view to a towdown view of the maze
+void set_topdown_view() {
+    float center_x = (float)(left + right) / 2;
+    float center_z = (float)(near + far) / 2;
+
+    vec4 new_eye = (vec4) {center_x, 1.5 * max_side, center_z, 1.0};
+    vec4 new_at = (vec4) {center_x, 0, center_z, 1.0};
+    vec4 new_up = (vec4) {0, 0, -1, 0};
+
+    // Set the position of the viewer
+    target_pos = (view_position) {new_eye, new_at, new_up};
+    ctm = m4_identity();
+
+    // Have the rotation remember that you're looking from the top now
+    previous_rotation_matrix = ctm;
+
+    // Re-enable Rotation
+    rotation_enabled = 1;
+
+    start_animation();
+}
+
+// Sets the view to the default side view
+void set_side_view() {
+    float center_x = (float)(left + right) / 2;
+    
+    // Set the position of the viewer
+    vec4 new_eye = (vec4) {center_x, 0, 1.5 * max_side, 0.0};
+    vec4 new_at = (vec4) {center_x, 0, 0, 0.0};
+    vec4 new_up = (vec4) {0.0, 1.0, 0.0, 0.0};
+
+    target_pos = (view_position) {new_eye, new_at, new_up};
+    ctm = m4_identity();
+
+    // Have the rotation remember that you're looking from the side now
+    previous_rotation_matrix = ctm;
+
+    // Re-enable Rotation
+    rotation_enabled = 1;
+
+    start_animation();
 }
 
 void keyboard(unsigned char key, int mousex, int mousey)
@@ -1283,7 +1283,7 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 {
                     target_pos = current_pos;
                     target_pos.eye = add_v4(current_pos.eye, (vec4) {0, 0, 10, 0.0});
-                    start_animation(0);
+                    start_animation();
                 }
                 break;
             case '=':
@@ -1291,7 +1291,7 @@ void keyboard(unsigned char key, int mousex, int mousey)
                 {
                     target_pos = current_pos;
                     target_pos.eye = sub_v4(current_pos.eye, (vec4) {0, 0, 10, 0.0});
-                    start_animation(0);
+                    start_animation();
                 }
                 break;
             case 'k':
