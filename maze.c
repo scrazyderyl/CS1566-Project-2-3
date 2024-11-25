@@ -195,7 +195,6 @@ void set_side_view() {
 
     target_pos = (view_position) {new_eye, new_at, new_up};
     ctm = m4_identity();
-    model_view = look_at(new_eye, new_at, new_up);
 
     // Have the rotation remember that you're looking from the side now
     previous_rotation_matrix = ctm;
@@ -530,8 +529,6 @@ void generate_world() {
     printf("Left: %d Right: %d\n", left, right);
     printf("Bottom: %d Top: %d\n", bottom, top);
     printf("Near: %d Far: %d\n", near, far);
-
-    set_side_view();
 
     // Allocate arrays
     positions = (vec4 *) malloc(sizeof(vec4) * num_vertices);
@@ -906,6 +903,16 @@ void print_helper_text()
 
 void init(void)
 {
+    // Set starting location
+    float center_x = (float)(left + right) / 2;
+
+    vec4 new_eye = (vec4) {center_x, 0, 1.5 * max_side, 0.0};
+    vec4 new_at = (vec4) {center_x, 0, 0, 0.0};
+    vec4 new_up = (vec4) {0.0, 1.0, 0.0, 0.0};
+
+    current_pos = (view_position) {new_eye, new_at, new_up};
+    model_view = look_at(new_eye, new_at, new_up);
+
     // Load textures
     int tex_width = 64;
     int tex_height = 64;
