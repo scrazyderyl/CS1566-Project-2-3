@@ -85,9 +85,7 @@ mat4 rotate_arbitrary_x(GLfloat ay, GLfloat az, GLfloat d);
 mat4 rotate_arbitrary_y(GLfloat ax, GLfloat d);
 
 // Viewing Functions
-mat4 look_at(GLfloat eyex, GLfloat eyey, GLfloat eyez,
-             GLfloat atx,  GLfloat aty,  GLfloat atz,
-             GLfloat upx,  GLfloat upy,  GLfloat upz);
+mat4 look_at(vec4 eye, vec4 at, vec4 up);
 
 mat4 ortho(GLfloat left, GLfloat right, 
            GLfloat bottom, GLfloat top, 
